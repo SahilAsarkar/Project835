@@ -1,0 +1,5 @@
+Django>=4.2.0
+pyotp>=2.9.0
+qrcode>=7.4.2
+Pillow>=10.0.0
+pyx12>=4.0.0
