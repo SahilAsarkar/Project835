@@ -1047,25 +1047,25 @@
         <div class="card" style="padding: 20px;">
           <h2 style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">Inbound SFTP</h2>
           <div class="eyebrow" style="margin-bottom: 12px;">835 FROM CLAIMS SYSTEM &bull; 837 OPTIONAL REFERENCE</div>
-          <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; font-weight: 600; font-size: 13px; color: var(--ink-2); margin-bottom: 14px;">
+          <div id="flowInboundBanner" style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; font-weight: 600; font-size: 13px; color: var(--ink-2); margin-bottom: 14px;">
             Not configured
           </div>
-          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">Host</span><span class="v" style="color:var(--ink-3);">&ndash;</span></div>
-          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">835 folder</span><span class="v" style="color:var(--ink-3);">&ndash;</span></div>
-          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">837 reference folder</span><span class="v" style="color:var(--ink-3);">&ndash;</span></div>
-          <div class="kv" style="padding: 8px 0;"><span class="k">Connection</span><span class="v" style="color:var(--ink-3); font-weight:500;">Not configured</span></div>
+          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">Host</span><span class="v" id="flowInboundHost" style="color:var(--ink-3);">&ndash;</span></div>
+          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">835 folder</span><span class="v" id="flowInbound835Dir" style="color:var(--ink-3);">&ndash;</span></div>
+          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">837 reference folder</span><span class="v" id="flowInbound837Dir" style="color:var(--ink-3);">&ndash;</span></div>
+          <div class="kv" style="padding: 8px 0;"><span class="k">Connection</span><span class="v" id="flowInboundConnection" style="color:var(--ink-3); font-weight:500;">Not configured</span></div>
         </div>
 
         <div class="card" style="padding: 20px;">
           <h2 style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">Outbound SFTP</h2>
           <div class="eyebrow" style="margin-bottom: 12px;">MIR DESTINATION FOR MPL</div>
-          <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; font-weight: 600; font-size: 13px; color: var(--ink-2); margin-bottom: 14px;">
+          <div id="flowOutboundBanner" style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; font-weight: 600; font-size: 13px; color: var(--ink-2); margin-bottom: 14px;">
             Not configured
           </div>
-          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">MIR folder</span><span class="v" style="color:var(--ink-3);">&ndash;</span></div>
+          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">MIR folder</span><span class="v" id="flowOutboundMirDir" style="color:var(--ink-3);">&ndash;</span></div>
           <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">MIR built today</span><span class="v" id="flowMirBuiltCount" style="font-weight:600;">{{ mir_outputs_today_count }}</span></div>
-          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">Last connection test</span><span class="v" style="color:var(--ink-3);">&ndash;</span></div>
-          <div class="kv" style="padding: 8px 0;"><span class="k">Folders discovered</span><span class="v" style="font-weight:600;">0</span></div>
+          <div class="kv" style="padding: 8px 0; border-bottom: 1px solid var(--line);"><span class="k">Last connection test</span><span class="v" id="flowOutboundLastTest" style="color:var(--ink-3);">&ndash;</span></div>
+          <div class="kv" style="padding: 8px 0;"><span class="k">Folders discovered</span><span class="v" id="flowOutboundFoldersDiscovered" style="font-weight:600;">0</span></div>
         </div>
       </div>
     </section>
@@ -1406,7 +1406,7 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
             <div id="sftpUniPassBox" style="margin-bottom: 16px;">
               <label style="display: block; font-size: 11px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px;">Password</label>
               <div class="pass-wrapper">
-                <input type="password" id="sftpUniPass" value="" placeholder="Enter SFTP password" style="width: 100%; padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px;">
+                <input type="password" id="sftpUniPass" value="" autocomplete="new-password" placeholder="Password" style="width: 100%; padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px;">
                 <button type="button" class="pass-toggle-btn" 
                         onmousedown="showPass('sftpUniPass', this)" 
                         onmouseup="hidePass('sftpUniPass', this)" 
@@ -1423,14 +1423,14 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
             <!-- SSH Key Container (Upload file format or Paste string) -->
             <div id="sftpUniSshKeyBox" class="hidden" style="margin-bottom: 16px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <label style="font-size: 11px; font-weight: 600; color: var(--ink-2); margin: 0;">SSH Key (Upload File or Paste String)</label>
+                <label style="font-size: 11px; font-weight: 600; color: var(--ink-2); margin: 0;">SSH Key</label>
                 <label style="font-size: 11px; font-weight: 600; color: var(--teal); cursor: pointer; display: flex; align-items: center; gap: 4px; border: 1px solid var(--teal); padding: 2px 8px; border-radius: 4px; background: var(--surface);">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   <span>Upload Key File</span>
-                  <input type="file" id="sftpUniKeyFileInput" accept=".pem,.key,.pub,id_rsa,*/*" style="display: none;" onchange="handleKeyFileUpload(this, 'sftpUniSshKey')">
+                  <input type="file" id="sftpUniKeyFileInput" accept=".pem,.key,id_rsa,id_ed25519,*/*" style="display: none;" onchange="handleKeyFileUpload(this, 'sftpUniSshKey')">
                 </label>
               </div>
-              <textarea id="sftpUniSshKey" rows="3" placeholder="Click 'Upload Key File' above or paste Private Key content (-----BEGIN RSA PRIVATE KEY-----)" style="width: 100%; padding: 8px 10px; font-size: 11px; font-family: var(--display); border: 1px solid var(--line); border-radius: 4px; resize: vertical; margin-top:0;"></textarea>
+              <textarea id="sftpUniSshKey" rows="3" autocomplete="off" placeholder="e.g. -----BEGIN OPENSSH PRIVATE KEY----- or C:\path\to\id_ed25519" style="width: 100%; padding: 8px 10px; font-size: 11px; font-family: var(--display); border: 1px solid var(--line); border-radius: 4px; resize: vertical; margin-top:0;"></textarea>
             </div>
 
             <!-- Trust Key -->
@@ -2564,7 +2564,8 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
           if (document.getElementById("sftpUniHost")) document.getElementById("sftpUniHost").value = active.host || '';
           if (document.getElementById("sftpUniPort")) document.getElementById("sftpUniPort").value = active.port || 22;
           if (document.getElementById("sftpUniUser")) document.getElementById("sftpUniUser").value = active.username || '';
-          if (document.getElementById("sftpUniSshKey")) document.getElementById("sftpUniSshKey").value = active.ssh_key || '';
+          if (document.getElementById("sftpUniPass")) document.getElementById("sftpUniPass").value = '';
+          if (document.getElementById("sftpUniSshKey")) document.getElementById("sftpUniSshKey").value = '';
           if (document.getElementById("sftpUniAuth")) {
             const authSel = document.getElementById("sftpUniAuth");
             authSel.value = active.auth_method || 'Password';
@@ -2602,14 +2603,43 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
         const discoveredBox = document.getElementById("sftpDiscoveredFoldersBox");
         if (discoveredBox) {
           let folderItems = [];
-          if (active.inbound_835_folder) {
-            folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 835 Inbound (.835 / .x12): <code>${active.inbound_835_folder}</code></div>`);
-          }
-          if (active.inbound_837_folder) {
-            folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 837 Reference (.837 / .x12): <code>${active.inbound_837_folder}</code></div>`);
-          }
-          if (active.outbound_mir_folder) {
-            folderItems.push(`<div style="padding:4px 0;">📁 MIR Outbound (.mir): <code>${active.outbound_mir_folder}</code></div>`);
+          if (active.use_same_server) {
+            if (active.inbound_835_folder) {
+              folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 835 Inbound (.835 / .x12): <code>${active.inbound_835_folder}</code></div>`);
+            }
+            if (active.inbound_837_folder) {
+              folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 837 Reference (.837 / .x12): <code>${active.inbound_837_folder}</code></div>`);
+            }
+            if (active.outbound_mir_folder) {
+              folderItems.push(`<div style="padding:4px 0;">📁 MIR Outbound (.mir): <code>${active.outbound_mir_folder}</code></div>`);
+            }
+          } else {
+            // Dual mode (Different Inbound & Outbound servers)
+            if (active.connection_type === 'INBOUND') {
+              if (active.inbound_835_folder) {
+                folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 835 Inbound (.835 / .x12): <code>${active.inbound_835_folder}</code></div>`);
+              }
+              if (active.inbound_837_folder) {
+                folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 837 Reference (.837 / .x12): <code>${active.inbound_837_folder}</code></div>`);
+              }
+              folderItems.push(`<div style="padding:4px 0; color:var(--ink-3);">📁 MIR Outbound (.mir): <code>-</code></div>`);
+            } else if (active.connection_type === 'OUTBOUND') {
+              folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line); color:var(--ink-3);">📁 835 Inbound (.835 / .x12): <code>-</code></div>`);
+              folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line); color:var(--ink-3);">📁 837 Reference (.837 / .x12): <code>-</code></div>`);
+              if (active.outbound_mir_folder) {
+                folderItems.push(`<div style="padding:4px 0;">📁 MIR Outbound (.mir): <code>${active.outbound_mir_folder}</code></div>`);
+              }
+            } else {
+              if (active.inbound_835_folder) {
+                folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 835 Inbound (.835 / .x12): <code>${active.inbound_835_folder}</code></div>`);
+              }
+              if (active.inbound_837_folder) {
+                folderItems.push(`<div style="padding:4px 0; border-bottom:1px solid var(--line);">📁 837 Reference (.837 / .x12): <code>${active.inbound_837_folder}</code></div>`);
+              }
+              if (active.outbound_mir_folder) {
+                folderItems.push(`<div style="padding:4px 0;">📁 MIR Outbound (.mir): <code>${active.outbound_mir_folder}</code></div>`);
+              }
+            }
           }
 
           if (folderItems.length > 0) {
@@ -2638,6 +2668,11 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
             </div>
           `;
         }
+
+        // Dynamically update Flow page Inbound & Outbound SFTP Cards
+        updateFlowViewSftpCards(configs, active);
+      } else {
+        updateFlowViewSftpCards([], null);
       }
 
       // Render Saved SFTP Configs Table
@@ -2645,6 +2680,79 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
 
     } catch (err) {
       console.warn("Failed to load SFTP config:", err);
+    }
+  }
+
+  function updateFlowViewSftpCards(configs, active) {
+    if (!configs) configs = [];
+    
+    // Find Inbound config (UNIFIED, INBOUND, or active)
+    const inboundCfg = configs.find(c => c.connection_type === 'INBOUND') 
+      || configs.find(c => c.connection_type === 'UNIFIED' || c.use_same_server)
+      || (active?.connection_type === 'INBOUND' || active?.use_same_server ? active : null);
+
+    // Find Outbound config (UNIFIED, OUTBOUND, or active)
+    const outboundCfg = configs.find(c => c.connection_type === 'OUTBOUND') 
+      || configs.find(c => c.connection_type === 'UNIFIED' || c.use_same_server)
+      || (active?.connection_type === 'OUTBOUND' || active?.use_same_server ? active : null);
+
+    // --- Update Inbound Card ---
+    const inBanner = document.getElementById("flowInboundBanner");
+    const inHost = document.getElementById("flowInboundHost");
+    const in835 = document.getElementById("flowInbound835Dir");
+    const in837 = document.getElementById("flowInbound837Dir");
+    const inConn = document.getElementById("flowInboundConnection");
+
+    if (inboundCfg && (inboundCfg.host || inboundCfg.inbound_835_folder)) {
+      const isConnected = inboundCfg.status === 'CONNECTED';
+      if (inBanner) {
+        inBanner.textContent = isConnected ? `Connected (${inboundCfg.host || 'SFTP'})` : `Configured (${inboundCfg.host || 'SFTP'})`;
+        inBanner.style.color = isConnected ? 'var(--teal)' : 'var(--ink-2)';
+      }
+      if (inHost) inHost.textContent = inboundCfg.host ? `${inboundCfg.host}:${inboundCfg.port || 22}` : '–';
+      if (in835) in835.textContent = inboundCfg.inbound_835_folder || '–';
+      if (in837) in837.textContent = inboundCfg.inbound_837_folder || '–';
+      if (inConn) {
+        inConn.textContent = inboundCfg.status || 'CONFIGURED';
+        inConn.style.color = isConnected ? 'var(--teal)' : (inboundCfg.status === 'FAILED' ? 'var(--brick)' : 'var(--ink-2)');
+      }
+    } else {
+      if (inBanner) { inBanner.textContent = 'Not configured'; inBanner.style.color = 'var(--ink-2)'; }
+      if (inHost) inHost.textContent = '–';
+      if (in835) in835.textContent = '–';
+      if (in837) in837.textContent = '–';
+      if (inConn) { inConn.textContent = 'Not configured'; inConn.style.color = 'var(--ink-3)'; }
+    }
+
+    // --- Update Outbound Card ---
+    const outBanner = document.getElementById("flowOutboundBanner");
+    const outMir = document.getElementById("flowOutboundMirDir");
+    const outLastTest = document.getElementById("flowOutboundLastTest");
+    const outDiscovered = document.getElementById("flowOutboundFoldersDiscovered");
+
+    if (outboundCfg && (outboundCfg.host || outboundCfg.outbound_mir_folder)) {
+      const isConnected = outboundCfg.status === 'CONNECTED';
+      if (outBanner) {
+        outBanner.textContent = isConnected ? `Connected (${outboundCfg.host || 'SFTP'})` : `Configured (${outboundCfg.host || 'SFTP'})`;
+        outBanner.style.color = isConnected ? 'var(--teal)' : 'var(--ink-2)';
+      }
+      if (outMir) outMir.textContent = outboundCfg.outbound_mir_folder || '–';
+      if (outLastTest) outLastTest.textContent = outboundCfg.last_tested_at || '–';
+      
+      let folderCount = 0;
+      if (outboundCfg.connection_type === 'UNIFIED' || outboundCfg.use_same_server) {
+        if (outboundCfg.inbound_835_folder) folderCount++;
+        if (outboundCfg.inbound_837_folder) folderCount++;
+        if (outboundCfg.outbound_mir_folder) folderCount++;
+      } else {
+        if (outboundCfg.outbound_mir_folder) folderCount++;
+      }
+      if (outDiscovered) outDiscovered.textContent = folderCount.toString();
+    } else {
+      if (outBanner) { outBanner.textContent = 'Not configured'; outBanner.style.color = 'var(--ink-2)'; }
+      if (outMir) outMir.textContent = '–';
+      if (outLastTest) outLastTest.textContent = '–';
+      if (outDiscovered) outDiscovered.textContent = '0';
     }
   }
 
@@ -2658,7 +2766,17 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
     }
 
     tbody.innerHTML = configs.map(c => {
-      const typeStr = c.use_same_server ? 'UNIFIED' : 'DUAL (IN/OUT)';
+      let typeStr = 'UNIFIED';
+      if (c.connection_type === 'INBOUND') {
+        typeStr = 'INBOUND';
+      } else if (c.connection_type === 'OUTBOUND') {
+        typeStr = 'OUTBOUND';
+      } else if (c.use_same_server) {
+        typeStr = 'UNIFIED';
+      } else {
+        typeStr = 'DUAL (IN/OUT)';
+      }
+
       const hostPort = `${c.host}:${c.port}`;
       const lastTested = c.last_tested_at || '—';
       const status = c.status || 'CONFIGURED';
@@ -2676,13 +2794,16 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
         hoverTitle = `Connected successfully on ${lastTested}`;
       }
 
+      const inPathDisplay = (c.connection_type === 'OUTBOUND') ? '—' : (c.inbound_835_folder || '—');
+      const outPathDisplay = (c.connection_type === 'INBOUND') ? '—' : (c.outbound_mir_folder || '—');
+
       return `
         <tr>
           <td class="num" style="font-weight:600; font-size:11.5px;">${typeStr}</td>
           <td class="num" style="font-weight:600; color:var(--ink-1);">${hostPort}</td>
           <td class="num">${c.username || 'anonymous'}</td>
-          <td class="num" style="color:var(--ink-2); font-size:11px;">${c.inbound_835_folder || '—'}</td>
-          <td class="num" style="color:var(--ink-2); font-size:11px;">${c.outbound_mir_folder || '—'}</td>
+          <td class="num" style="color:var(--ink-2); font-size:11px;">${inPathDisplay}</td>
+          <td class="num" style="color:var(--ink-2); font-size:11px;">${outPathDisplay}</td>
           <td>
             <span class="tag ${tagClass}" style="cursor:pointer;" title="${hoverTitle}">
               ${status}
@@ -2705,13 +2826,17 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
     const passValue = passInput?.value || "";
     if (passValue) window.lastEnteredSftpPass = passValue;
 
+    const sshKeyInput = document.getElementById("sftpUniSshKey");
+    const sshKeyValue = sshKeyInput?.value || "";
+    if (sshKeyValue) window.lastEnteredSshKey = sshKeyValue;
+
     try {
       const payload = {
         host: document.getElementById("sftpUniHost")?.value || "",
         port: document.getElementById("sftpUniPort")?.value || 22,
         username: document.getElementById("sftpUniUser")?.value || "",
         password: passValue,
-        ssh_key: document.getElementById("sftpUniSshKey")?.value || "",
+        ssh_key: sshKeyValue,
         auth_method: document.getElementById("sftpUniAuth")?.value || "Password",
         trust_unknown_key: document.getElementById("sftpUniTrust")?.checked || true,
         inbound_837_folder: document.getElementById("sftpUniDir837")?.value || "",
@@ -2719,8 +2844,9 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
         outbound_mir_folder: document.getElementById("sftpUniDirMir")?.value || "",
       };
 
-      // Vanish password from password input field after clicking connect
+      // Immediately clear user-entered Password and SSH Key from input fields right after clicking Test & Connect
       if (passInput) passInput.value = "";
+      if (sshKeyInput) sshKeyInput.value = "";
 
       const res = await fetch('/api/sftp/connect', {
         method: 'POST',
@@ -2851,7 +2977,7 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
     try {
       const payload = {
         use_same_server: false,
-        connection_type: "INBOUND_OUTBOUND",
+        connection_type: (type === 'inbound') ? "INBOUND" : "OUTBOUND",
         host: document.getElementById("sftpInHost")?.value || "inbound.sftp.example.com",
         port: document.getElementById("sftpInPort")?.value || 22,
         username: document.getElementById("sftpInUser")?.value || "",
@@ -3145,7 +3271,7 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
         payload.port = document.getElementById("sftpUniPort")?.value || 22;
         payload.username = userVal;
         payload.password = document.getElementById("sftpUniPass")?.value || window.lastEnteredSftpPass || "";
-        payload.ssh_key = document.getElementById("sftpUniSshKey")?.value || "";
+        payload.ssh_key = document.getElementById("sftpUniSshKey")?.value || window.lastEnteredSshKey || "";
         payload.auth_method = document.getElementById("sftpUniAuth")?.value || "Password";
       }
 

@@ -220,7 +220,7 @@ def api_get_sftp_config(request):
             "host": c.host,
             "port": c.port,
             "username": c.username,
-            "ssh_key": c.ssh_key,
+            "ssh_key": "",
             "auth_method": c.auth_method,
             "trust_unknown_key": c.trust_unknown_key,
             "inbound_837_folder": c.inbound_837_folder,
@@ -247,14 +247,25 @@ def api_get_sftp_config(request):
 def parse_ssh_private_key(ssh_key_str, password=None):
     """
     Parses SSH Private Key string or file path using Paramiko key classes.
+    If a .pub file path or public key string is provided, automatically attempts
+    to locate the corresponding private key file on the local system.
     Returns (pkey_object, error_message).
     """
     if not ssh_key_str:
         return None, "No SSH Private Key provided."
 
     import io, os, paramiko
+    from pathlib import Path
 
     key_str = ssh_key_str.strip()
+
+    # 1. If key_str is a file path ending with .pub, check for private key file without .pub extension
+    if key_str.lower().endswith(".pub"):
+        priv_path = key_str[:-4]
+        if os.path.exists(priv_path) and os.path.isfile(priv_path):
+            key_str = priv_path
+
+    # 2. If key_str is an existing file path, read its content
     if os.path.exists(key_str) and os.path.isfile(key_str):
         try:
             with open(key_str, "r", encoding="utf-8", errors="ignore") as f:
@@ -262,9 +273,54 @@ def parse_ssh_private_key(ssh_key_str, password=None):
         except Exception as e:
             return None, f"Failed to read SSH Key file: {str(e)}"
 
-    # Detect if user accidentally provided a PUBLIC key instead of a PRIVATE key
+    # 3. Detect if user provided a PUBLIC key string (starts with 'ssh-ed25519', 'ssh-rsa', etc.)
     if key_str.startswith(("ssh-rsa", "ssh-ed25519", "ecdsa-sha2-", "ssh-dss")):
-        return None, "You provided an SSH Public Key (starts with 'ssh-ed25519' / 'ssh-rsa'). Please provide your SSH Private Key file (containing '-----BEGIN OPENSSH PRIVATE KEY-----' or '-----BEGIN RSA PRIVATE KEY-----')."
+        # Try to find corresponding private key in default SSH directories
+        user_home = Path.home()
+        ssh_dir = user_home / ".ssh"
+        candidate_files = [
+            ssh_dir / "id_ed25519",
+            ssh_dir / "id_rsa",
+            ssh_dir / "id_ecdsa",
+            ssh_dir / "id_dsa",
+        ]
+        
+        found_pkey = None
+        key_classes = [getattr(paramiko, k, None) for k in ["Ed25519Key", "RSAKey", "ECDSAKey", "DSSKey"]]
+        key_classes = [k for k in key_classes if k is not None]
+        passwords_to_try = [password] if password else [None]
+
+        for cand in candidate_files:
+            if cand.is_file():
+                try:
+                    with open(cand, "r", encoding="utf-8", errors="ignore") as f:
+                        cand_str = f.read().strip()
+                    for pass_cand in passwords_to_try:
+                        for key_cls in key_classes:
+                            try:
+                                pkey = key_cls.from_private_key(io.StringIO(cand_str), password=pass_cand)
+                                if pkey:
+                                    # Check if the public key of this private key matches or use it
+                                    pub_b64 = pkey.get_base64()
+                                    if pub_b64 in key_str:
+                                        return pkey, None
+                                    if not found_pkey:
+                                        found_pkey = pkey
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+        if found_pkey:
+            return found_pkey, None
+
+        return None, (
+            "You provided an SSH Public Key (.pub file or 'ssh-ed25519 ...' string). "
+            "Public keys are stored on the remote server, while SSH authentication requires your secret Private Key file "
+            "(e.g., 'id_ed25519' without .pub, containing '-----BEGIN OPENSSH PRIVATE KEY-----'). "
+            "Mathematically, a Private Key cannot be generated from a Public Key. "
+            "Please provide/upload your SSH Private Key file."
+        )
 
     key_classes = [getattr(paramiko, k, None) for k in ["Ed25519Key", "RSAKey", "ECDSAKey", "DSSKey"]]
     key_classes = [k for k in key_classes if k is not None]
@@ -585,33 +641,38 @@ def api_save_sftp_config(request):
     if isinstance(use_same_server, str):
         use_same_server = (use_same_server.lower() == "true")
 
-    connection_type = body.get("connection_type", "UNIFIED" if use_same_server else "INBOUND_OUTBOUND")
+    connection_type = body.get("connection_type", "UNIFIED" if use_same_server else "INBOUND")
 
-    # Inbound / Unified host fields
-    host = body.get("host", "sftp.example.com").strip() or "sftp.example.com"
-    port = int(body.get("port", 22) or 22)
-    username = body.get("username", "").strip()
-    password = body.get("password", "").strip()
-    ssh_key = body.get("ssh_key", "").strip()
-    auth_method = body.get("auth_method", "Password").strip()
-    trust_unknown_key = body.get("trust_unknown_key", True)
-    if isinstance(trust_unknown_key, str):
-        trust_unknown_key = (trust_unknown_key.lower() == "true")
+    if connection_type == "OUTBOUND":
+        host = (body.get("outbound_host") or body.get("host") or "").strip()
+        port = int(body.get("outbound_port") or body.get("port") or 22)
+        username = (body.get("outbound_username") or body.get("username") or "").strip()
+        password = (body.get("outbound_password") or body.get("password") or "").strip()
+        ssh_key = (body.get("outbound_ssh_key") or body.get("ssh_key") or "").strip()
+        auth_method = (body.get("outbound_auth_method") or body.get("auth_method") or "Password").strip()
+        trust_unknown_key = body.get("outbound_trust_unknown_key", body.get("trust_unknown_key", True))
+        if isinstance(trust_unknown_key, str):
+            trust_unknown_key = (trust_unknown_key.lower() == "true")
 
-    inbound_837_folder = body.get("inbound_837_folder", "").strip()
-    inbound_835_folder = body.get("inbound_835_folder", "").strip()
+        inbound_837_folder = ""
+        inbound_835_folder = ""
+        outbound_mir_folder = body.get("outbound_mir_folder", "").strip()
+        test_folder = outbound_mir_folder or "/"
+    else:
+        host = (body.get("host") or "").strip()
+        port = int(body.get("port") or 22)
+        username = body.get("username", "").strip()
+        password = body.get("password", "").strip()
+        ssh_key = body.get("ssh_key", "").strip()
+        auth_method = body.get("auth_method", "Password").strip()
+        trust_unknown_key = body.get("trust_unknown_key", True)
+        if isinstance(trust_unknown_key, str):
+            trust_unknown_key = (trust_unknown_key.lower() == "true")
 
-    # Outbound host fields
-    outbound_host = body.get("outbound_host", "").strip()
-    outbound_port = int(body.get("outbound_port", 22) or 22)
-    outbound_username = body.get("outbound_username", "").strip()
-    outbound_password = body.get("outbound_password", "").strip()
-    outbound_auth_method = body.get("outbound_auth_method", "Password").strip()
-    outbound_trust_unknown_key = body.get("outbound_trust_unknown_key", True)
-    if isinstance(outbound_trust_unknown_key, str):
-        outbound_trust_unknown_key = (outbound_trust_unknown_key.lower() == "true")
-
-    outbound_mir_folder = body.get("outbound_mir_folder", "").strip()
+        inbound_837_folder = body.get("inbound_837_folder", "").strip()
+        inbound_835_folder = body.get("inbound_835_folder", "").strip()
+        outbound_mir_folder = body.get("outbound_mir_folder", "").strip() if use_same_server else ""
+        test_folder = inbound_835_folder or "/"
 
     # Perform connection test using helper
     test_res = test_sftp_connection(
@@ -622,7 +683,7 @@ def api_save_sftp_config(request):
         ssh_key=ssh_key,
         auth_method=auth_method,
         trust_unknown_key=trust_unknown_key,
-        remote_folder=inbound_835_folder,
+        remote_folder=test_folder,
     )
 
     config_id = body.get("id")
@@ -631,11 +692,12 @@ def api_save_sftp_config(request):
         config = SFTPConfig.objects.filter(id=config_id).first()
 
     if not config:
-        config = SFTPConfig.objects.first()
+        config = SFTPConfig.objects.filter(connection_type=connection_type).first()
 
     if not config:
         config = SFTPConfig()
 
+    config.name = f"{connection_type} Connection"
     config.use_same_server = use_same_server
     config.connection_type = connection_type
     config.host = host
@@ -649,19 +711,18 @@ def api_save_sftp_config(request):
     config.trust_unknown_key = trust_unknown_key
     config.inbound_837_folder = inbound_837_folder
     config.inbound_835_folder = inbound_835_folder
-
-    config.outbound_host = outbound_host or host
-    config.outbound_port = outbound_port
-    config.outbound_username = outbound_username or username
-    if outbound_password:
-        config.outbound_password = outbound_password
-    config.outbound_auth_method = outbound_auth_method
-    config.outbound_trust_unknown_key = outbound_trust_unknown_key
     config.outbound_mir_folder = outbound_mir_folder
 
-    if not host or not username or not inbound_835_folder or not outbound_mir_folder:
+    if connection_type == "INBOUND":
+        missing = not host or not username or not inbound_835_folder
+    elif connection_type == "OUTBOUND":
+        missing = not host or not username or not outbound_mir_folder
+    else:
+        missing = not host or not username or not inbound_835_folder or not outbound_mir_folder
+
+    if missing:
         config.status = "PENDING"
-        config.last_error = "Pending: SFTP host, username, or remote folders are not fully configured."
+        config.last_error = "Pending: Host, username, or remote folders are not fully configured."
     elif test_res["success"]:
         config.status = "CONNECTED"
         config.last_error = None
