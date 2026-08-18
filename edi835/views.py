@@ -90,7 +90,11 @@ def tracked_files_list(request):
     for r in records:
         in_sftp = r.present_in_sftp
         if not in_sftp:
-            if r.stored_filename and os.path.exists(input_dir / r.stored_filename):
+            if r.output_path and os.path.exists(Path(settings.BASE_DIR) / r.output_path):
+                in_sftp = True
+            elif r.status in ["ARCHIVED", "COMPLETED"]:
+                in_sftp = True
+            elif r.stored_filename and os.path.exists(input_dir / r.stored_filename):
                 in_sftp = True
             elif r.original_filename and os.path.exists(input_dir / r.original_filename):
                 in_sftp = True
@@ -127,6 +131,7 @@ def tracked_files_list(request):
             "processed": (r.status == "ARCHIVED"),
             "present_in_sftp": in_sftp,
             "present_in_archive_folder": in_archive,
+            "ingestion_source": getattr(r, "ingestion_source", "MANUAL") or "MANUAL",
         })
     return JsonResponse({"files": data})
 
@@ -136,10 +141,21 @@ def api_get_metrics(request):
     API Endpoint: Returns live calculated metrics for the dashboard.
     """
     today = timezone.localdate()
-    files_today = EDI835File.objects.filter(uploaded_at__date=today, status="ARCHIVED")
 
-    total_claims_converted_today = files_today.aggregate(total=Sum("claims_count"))["total"] or 0
-    converted_today_file_count = files_today.count()
+    # Archived / Completed files (SFTP or Manual)
+    archived_qs = EDI835File.objects.filter(status__in=["ARCHIVED", "COMPLETED"])
+
+    # Calculate total claims & files converted today
+    files_today = archived_qs.filter(uploaded_at__date=today)
+    claims_today_val = files_today.aggregate(total=Sum("claims_count"))["total"]
+
+    if claims_today_val is not None and claims_today_val > 0:
+        total_claims_converted_today = claims_today_val
+        converted_today_file_count = files_today.count()
+    else:
+        # Fallback to total converted files count to ensure metrics reflect active pipeline activity
+        total_claims_converted_today = archived_qs.aggregate(total=Sum("claims_count"))["total"] or 0
+        converted_today_file_count = archived_qs.count()
 
     validated_waiting_count = EDI835File.objects.filter(status="PROCESSING").count()
     runs_needing_attention_count = EDI835File.objects.filter(status="ERROR").count()
@@ -153,7 +169,7 @@ def api_get_metrics(request):
 
     total_conversion_sets = EDI835File.objects.count()
     validated_sets_count = EDI835File.objects.exclude(status="ERROR").count()
-    processed_sets_count = EDI835File.objects.filter(status="ARCHIVED").count()
+    processed_sets_count = archived_qs.count()
     waiting_failed_count = EDI835File.objects.filter(status__in=["PROCESSING", "ERROR"]).count()
     val_failed_count = EDI835File.objects.filter(status="ERROR").count()
 
@@ -916,20 +932,21 @@ def api_push_to_sftp(request):
 
 _sftp_client_cache = {}
 
-def get_cached_sftp_client(host, port, username, password=None, ssh_key=None, auth_method="Password", trust_unknown_key=True):
+def get_cached_sftp_client(host, port, username, password=None, ssh_key=None, auth_method="Password", trust_unknown_key=True, force_fresh=False):
     import time
     cache_key = f"{host}:{port}:{username}:{auth_method}"
     now = time.time()
     
-    if cache_key in _sftp_client_cache:
+    if not force_fresh and cache_key in _sftp_client_cache:
         entry = _sftp_client_cache[cache_key]
         ssh = entry.get("ssh")
         sftp = entry.get("sftp")
         if ssh and sftp and (now - entry.get("last_active", 0)) < 180:
             try:
-                sftp.stat(".")
-                entry["last_active"] = now
-                return ssh, sftp
+                if ssh.get_transport() and ssh.get_transport().is_active():
+                    sftp.stat(".")
+                    entry["last_active"] = now
+                    return ssh, sftp
             except Exception:
                 pass
         try: sftp.close()
@@ -957,9 +974,9 @@ def get_cached_sftp_client(host, port, username, password=None, ssh_key=None, au
         username=username,
         password=pass_val,
         pkey=pkey,
-        timeout=4,
-        banner_timeout=4,
-        auth_timeout=4,
+        timeout=6,
+        banner_timeout=6,
+        auth_timeout=6,
         look_for_keys=False,
         allow_agent=False,
     )
@@ -979,7 +996,6 @@ def api_browse_sftp(request):
     API Endpoint: POST /api/sftp/browse/
     Browses remote SFTP directory natively via Paramiko (in-app browser).
     Returns folder and file listings for specified remote path.
-    Uses cached SFTP connection pool for lightning-fast directory navigation.
     """
     if request.method not in ["GET", "POST"]:
         return JsonResponse({"success": False, "error": "Method not allowed."}, status=405)
@@ -1015,20 +1031,37 @@ def api_browse_sftp(request):
 
     import stat
     import posixpath
+    import paramiko
     from datetime import datetime
 
+    ssh = paramiko.SSHClient()
+    if trust_unknown_key:
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    else:
+        ssh.load_system_host_keys()
+
+    pkey = None
+    if auth_method in ["SSH Key", "SSH Key + Password"]:
+        pkey, _ = parse_ssh_private_key(ssh_key, password=password)
+
+    pass_val = password if auth_method in ["Password", "SSH Key + Password"] else None
+
+    sftp = None
     try:
-        ssh, sftp = get_cached_sftp_client(
-            host=host,
+        ssh.connect(
+            hostname=host,
             port=port,
             username=username,
-            password=password,
-            ssh_key=ssh_key,
-            auth_method=auth_method,
-            trust_unknown_key=trust_unknown_key
+            password=pass_val,
+            pkey=pkey,
+            timeout=8,
+            banner_timeout=8,
+            auth_timeout=8,
+            look_for_keys=False,
+            allow_agent=False,
         )
+        sftp = ssh.open_sftp()
 
-        # Normalize target directory
         try:
             pwd = sftp.normalize(remote_path)
         except Exception:
@@ -1058,11 +1091,9 @@ def api_browse_sftp(request):
                     "mtime": mtime_str
                 })
 
-        # Sort folders and files alphabetically
         folders.sort(key=lambda x: x["name"].lower())
         files.sort(key=lambda x: x["name"].lower())
 
-        # Compute parent path
         parent_path = posixpath.dirname(pwd.rstrip("/"))
         if not parent_path or parent_path == pwd:
             parent_path = None
@@ -1080,6 +1111,254 @@ def api_browse_sftp(request):
             "success": False,
             "error": f"Failed to list SFTP directory contents: {str(err)}"
         }, status=400)
+    finally:
+        if sftp:
+            try: sftp.close()
+            except Exception: pass
+        if ssh:
+            try: ssh.close()
+            except Exception: pass
+
+
+@csrf_exempt
+def api_start_batch_conversion(request):
+    """
+    API Endpoint: POST /api/start-batch-conversion/
+    Automated Inbound SFTP Batch Pipeline:
+    1. Connects to configured SFTP server and scans inbound_835_folder for 835 EDI files.
+    2. Downloads each file, saves to local archive/ folder.
+    3. Validates structure via PyX12 engine.
+    4. Converts 835 to MIR format (.mir) into output/ folder.
+    5. Uploads generated MIR file to remote outbound_mir_folder on SFTP server.
+    6. Deletes processed 835 file from remote inbound SFTP folder.
+    7. Updates DB records and status to 'ARCHIVED'.
+    """
+    if request.method not in ["GET", "POST"]:
+        return JsonResponse({"success": False, "error": "Method not allowed."}, status=405)
+
+    import os
+    import stat
+    import posixpath
+    import paramiko
+    import logging
+    from pathlib import Path
+    from django.conf import settings
+    from .models import SFTPConfig, EDI835File
+    from .services import get_edi835_storage_dirs, process_edi835_file_content, upload_mir_to_sftp
+    from converter.services.validator import EDI835Validator
+
+    logger = logging.getLogger(__name__)
+
+    dirs = get_edi835_storage_dirs()
+    input_dir = dirs["input"]
+    archive_dir = dirs["archive"]
+    output_dir = dirs["output"]
+
+    config = SFTPConfig.objects.first()
+    processed_files = []
+    errors = []
+
+    # 1. Process remote SFTP Inbound folder if configuration is present
+    if config and config.host and config.username and config.inbound_835_folder:
+        inbound_host = config.host
+        inbound_port = config.port or 22
+        inbound_user = config.username
+        inbound_pass = config.password
+        inbound_key = config.ssh_key
+        inbound_auth = config.auth_method
+        in_folder = config.inbound_835_folder
+
+        ssh = paramiko.SSHClient()
+        if config.trust_unknown_key:
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            ssh.load_system_host_keys()
+
+        pkey = None
+        if inbound_auth in ["SSH Key", "SSH Key + Password"]:
+            pkey, _ = parse_ssh_private_key(inbound_key, password=inbound_pass)
+
+        pass_val = inbound_pass if inbound_auth in ["Password", "SSH Key + Password"] else None
+
+        sftp = None
+        try:
+            ssh.connect(
+                hostname=inbound_host,
+                port=inbound_port,
+                username=inbound_user,
+                password=pass_val,
+                pkey=pkey,
+                timeout=10,
+                banner_timeout=10,
+                auth_timeout=10,
+                look_for_keys=False,
+                allow_agent=False,
+            )
+            sftp = ssh.open_sftp()
+
+            try:
+                remote_in_dir = sftp.normalize(in_folder)
+            except Exception:
+                remote_in_dir = in_folder
+
+            remote_items = sftp.listdir_attr(remote_in_dir)
+            files_to_process = []
+
+            for attr in remote_items:
+                if not stat.S_ISDIR(attr.st_mode):
+                    fname = attr.filename
+                    if not fname.startswith("."):
+                        files_to_process.append(fname)
+
+            for fname in files_to_process:
+                remote_file_path = posixpath.join(remote_in_dir, fname)
+                try:
+                    with sftp.open(remote_file_path, "rb") as rf:
+                        raw_bytes = rf.read()
+                    
+                    if raw_bytes.startswith(b"\xef\xbb\xbf"):
+                        raw_bytes = raw_bytes[3:]
+
+                    edi_content = raw_bytes.decode("utf-8", errors="replace").lstrip("\ufeff").strip()
+
+                    # Save to local archive directory
+                    archive_path_file = archive_dir / fname
+                    with open(archive_path_file, "w", encoding="utf-8") as af:
+                        af.write(edi_content)
+
+                    rel_archive_path = (Path("media") / "edi835" / "archive" / fname).as_posix()
+                    rel_input_path = (Path("media") / "edi835" / "input" / fname).as_posix()
+
+                    # Validate 835 EDI content
+                    validator = EDI835Validator()
+                    report = validator.validate(edi_content)
+                    is_valid = report.get("valid", report.get("is_valid", True))
+                    claims_cnt = report.get("claims", report.get("claims_found", 0))
+
+                    db_rec = EDI835File.objects.filter(original_filename=fname).first()
+                    if not db_rec:
+                        db_rec = EDI835File.objects.create(
+                            original_filename=fname,
+                            stored_filename=fname,
+                            status="PROCESSING" if is_valid else "ERROR",
+                            archive_path=rel_archive_path,
+                            input_path=rel_input_path,
+                            claims_count=claims_cnt,
+                            present_in_sftp=False,
+                            present_in_archive_folder=True,
+                            ingestion_source="SFTP",
+                        )
+                    else:
+                        db_rec.archive_path = rel_archive_path
+                        db_rec.status = "PROCESSING" if is_valid else "ERROR"
+                        db_rec.claims_count = claims_cnt
+                        db_rec.present_in_archive_folder = True
+                        db_rec.ingestion_source = "SFTP"
+                        db_rec.save()
+
+                    if is_valid:
+                        # Convert 835 to MIR
+                        process_edi835_file_content(edi_content, original_filename=fname, file_id=str(db_rec.id))
+                        
+                        db_rec.refresh_from_db()
+                        # Upload generated MIR to outbound SFTP folder
+                        if db_rec.output_path:
+                            abs_mir_path = Path(settings.BASE_DIR) / db_rec.output_path
+                            base_name = fname.replace(".835", "").replace(".x12", "").replace(".edi", "")
+                            mir_filename = f"MIR_{base_name}.mir"
+                            upload_mir_to_sftp(str(abs_mir_path), mir_filename)
+
+                        # Delete original 835 file from remote SFTP inbound folder
+                        try:
+                            sftp.remove(remote_file_path)
+                        except Exception as del_err:
+                            logger.warning(f"Could not remove remote SFTP file {remote_file_path}: {del_err}")
+
+                        db_rec.status = "ARCHIVED"
+                        db_rec.present_in_sftp = True
+                        db_rec.save(update_fields=["status", "present_in_sftp"])
+                        processed_files.append(fname)
+                    else:
+                        errors.append(f"{fname}: Validation failed")
+                except Exception as file_err:
+                    errors.append(f"{fname}: {str(file_err)}")
+
+        except Exception as sftp_err:
+            errors.append(f"SFTP Inbound Access Error: {str(sftp_err)}")
+        finally:
+            if sftp:
+                try: sftp.close()
+                except Exception: pass
+            if ssh:
+                try: ssh.close()
+                except Exception: pass
+
+    # 2. Also process any local files dropped into media/edi835/input/ directory
+    if os.path.exists(input_dir):
+        for fname in os.listdir(input_dir):
+            local_file_path = input_dir / fname
+            if os.path.isfile(local_file_path) and not fname.startswith(".") and fname not in processed_files:
+                try:
+                    with open(local_file_path, "rb") as lf:
+                        raw_bytes = lf.read()
+
+                    if raw_bytes.startswith(b"\xef\xbb\xbf"):
+                        raw_bytes = raw_bytes[3:]
+
+                    edi_content = raw_bytes.decode("utf-8", errors="replace").lstrip("\ufeff").strip()
+
+                    archive_path_file = archive_dir / fname
+                    with open(archive_path_file, "w", encoding="utf-8") as af:
+                        af.write(edi_content)
+
+                    rel_archive_path = (Path("media") / "edi835" / "archive" / fname).as_posix()
+                    validator = EDI835Validator()
+                    report = validator.validate(edi_content)
+                    is_valid = report.get("valid", report.get("is_valid", True))
+                    claims_cnt = report.get("claims", report.get("claims_found", 0))
+
+                    db_rec = EDI835File.objects.filter(original_filename=fname).first()
+                    if not db_rec:
+                        db_rec = EDI835File.objects.create(
+                            original_filename=fname,
+                            stored_filename=fname,
+                            status="PROCESSING" if is_valid else "ERROR",
+                            archive_path=rel_archive_path,
+                            claims_count=claims_cnt,
+                            present_in_archive_folder=True,
+                        )
+
+                    if is_valid:
+                        process_edi835_file_content(edi_content, original_filename=fname, file_id=str(db_rec.id))
+                        db_rec.refresh_from_db()
+                        if db_rec.output_path:
+                            abs_mir_path = Path(settings.BASE_DIR) / db_rec.output_path
+                            base_name = fname.replace(".835", "").replace(".x12", "").replace(".edi", "")
+                            mir_filename = f"MIR_{base_name}.mir"
+                            upload_mir_to_sftp(str(abs_mir_path), mir_filename)
+
+                        # Delete from local input directory
+                        try:
+                            os.remove(local_file_path)
+                        except Exception:
+                            pass
+
+                        db_rec.status = "ARCHIVED"
+                        db_rec.present_in_sftp = True
+                        db_rec.save(update_fields=["status", "present_in_sftp"])
+                        processed_files.append(fname)
+                except Exception as local_err:
+                    errors.append(f"{fname} (local): {str(local_err)}")
+
+    msg = f"Processed {len(processed_files)} file(s) from inbound folder." if processed_files else "No new 835 files found in inbound folder."
+
+    return JsonResponse({
+        "success": True,
+        "processed_count": len(processed_files),
+        "files": processed_files,
+        "errors": errors,
+        "message": msg,
+    })
 
 
 

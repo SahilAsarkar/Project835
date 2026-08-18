@@ -20,7 +20,10 @@ class PyX12Validator:
         Validate EDI 835 file content using PyX12 library.
         Passes raw EDI text directly to PyX12 without manual splitting or segment counting.
         """
-        if not edi_text or not edi_text.strip():
+        if edi_text:
+            edi_text = edi_text.lstrip("\ufeff").strip()
+
+        if not edi_text:
             return {
                 "valid": False,
                 "validator_engine": "Validated using PyX12",

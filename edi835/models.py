@@ -88,6 +88,11 @@ class EDI835File(models.Model):
         default=False,
         help_text="Boolean indicator if file is currently present in archive folder on disk."
     )
+    ingestion_source = models.CharField(
+        max_length=50,
+        default="MANUAL",
+        help_text="File ingestion origin: SFTP or MANUAL."
+    )
 
     class Meta:
         db_table = "835file"

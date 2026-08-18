@@ -1,0 +1,16 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Node / React
+node_modules/
+dist/
+.vite/
+
+# System / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

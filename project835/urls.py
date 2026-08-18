@@ -16,14 +16,17 @@ def root_redirect(request):
 from django.conf import settings
 from django.conf.urls.static import static
 
+from home.views import home_view
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
     path("home/", include("home.urls")),
     path("edi835/", include("edi835.urls")),
     path("", include("converter.urls")),
-    path("", root_redirect, name="root"),
+    path("", home_view, name="root"),
 ]
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

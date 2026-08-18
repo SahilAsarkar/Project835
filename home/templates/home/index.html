@@ -964,7 +964,7 @@
             <div class="who">Source used to build MIR</div>
             <div class="chipstack" id="stage2Chips">
               {% if recent_files %}
-                {% for f in recent_files|slice:":1" %}
+                {% for f in recent_files %}
                   <div class="chip {% if f.status == 'ARCHIVED' %}ok{% elif f.status == 'PROCESSING' %}work{% else %}hold{% endif %}">
                     <span title="{{ f.original_filename }}">{{ f.original_filename|slice:":26" }}</span>
                     <span class="c">{{ f.claims_count }} clm</span>
@@ -983,11 +983,13 @@
             <div class="who">Relay conversion</div>
             <div class="chipstack" id="stage3Chips">
               {% if recent_files %}
-                {% for f in recent_files|slice:":1" %}
-                  <div class="chip {% if f.status == 'ARCHIVED' %}ok{% elif f.status == 'PROCESSING' %}work{% else %}hold{% endif %}">
-                    <span title="{{ f.original_filename }}">MIR_{{ f.original_filename|slice:":20" }}.mir</span>
-                    <span class="c">{% if f.status == 'ARCHIVED' %}{{ f.records_count|default:f.claims_count }} rec{% elif f.status == 'PROCESSING' %}running{% else %}1 held{% endif %}</span>
-                  </div>
+                {% for f in recent_files %}
+                  {% if f.status == 'ARCHIVED' or f.status == 'COMPLETED' %}
+                    <div class="chip ok">
+                      <span title="{{ f.original_filename }}">MIR_{{ f.original_filename|slice:":20" }}.mir</span>
+                      <span class="c">{{ f.records_count|default:f.claims_count }} rec</span>
+                    </div>
+                  {% endif %}
                 {% endfor %}
               {% else %}
                 <div class="chip idle"><span>No MIR built today</span><span class="c">&ndash;</span></div>
@@ -1114,6 +1116,10 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               <span>Process MIR</span>
             </button>
+            <button type="button" class="btn-gray" id="btnStartBatchConversion" title="Test SFTP Inbound Batch Conversion: Reads all files from inbound SFTP folder, validates, archives, converts to MIR, uploads to outbound SFTP, and deletes original file from inbound SFTP.">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>Test</span>
+            </button>
           </div>
         </div>
 
@@ -1155,18 +1161,6 @@
             <div class="eyebrow" style="color: var(--brick); margin-bottom: 6px;">Errors Found</div>
             <div id="convErrorsList"></div>
           </div>
-        </div>
-
-        <!-- MIR RESULT OUTPUT CARD -->
-        <div id="convMirResultCard" class="hidden" style="margin-top: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <h2 style="font-size: 14px; margin: 0;">Generated MIR Output</h2>
-            <div style="display: flex; gap: 8px;">
-              <button type="button" class="btn" id="convCopyBtn">Copy Text</button>
-              <button type="button" class="btn success" id="convDownloadBtn">Download .mir File</button>
-            </div>
-          </div>
-          <pre id="convMirOutput"></pre>
         </div>
       </div>
 
@@ -1250,9 +1244,29 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
 
     <!-- ============ ARCHIVE VIEW (EXACT MATCH FOR REFERENCE SCREENSHOT) ============ -->
     <section class="view" id="v-archive">
-      <div style="display:flex; align-items:baseline; gap:10px;">
-        <h1 style="margin:0;">Archive</h1>
-        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase;">ALL CONVERSION-SET HISTORY</span>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <div style="display:flex; align-items:baseline; gap:10px;">
+          <h1 style="margin:0;">Archive</h1>
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase;">ALL CONVERSION-SET HISTORY</span>
+        </div>
+
+        <!-- ZIP ARCHIVE DOWNLOAD DROPDOWN -->
+        <div style="position: relative; display: inline-block;">
+          <button type="button" class="btn-gray" id="btnZipDropdownToggle" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer;" title="Export Archive to ZIP">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 8v13H3V8"></path>
+              <path d="M1 3h22v5H1z"></path>
+              <path d="M10 12h4"></path>
+            </svg>
+            <span>ZIP Archive</span>
+            <span style="font-size: 10px; margin-left: 2px;">&#9660;</span>
+          </button>
+          <div id="zipDropdownMenu" class="hidden" style="position: absolute; top: 100%; right: 0; margin-top: 6px; background: #ffffff; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); z-index: 200; min-width: 210px; overflow: hidden;">
+            <a href="/api/download-zip/?type=mir" style="display: block; padding: 10px 14px; font-size: 12px; color: #1e293b; text-decoration: none; border-bottom: 1px solid #f1f5f9; font-weight: 500;">📄 Download all MIR (.mir)</a>
+            <a href="/api/download-zip/?type=835" style="display: block; padding: 10px 14px; font-size: 12px; color: #1e293b; text-decoration: none; border-bottom: 1px solid #f1f5f9; font-weight: 500;">📦 Download all 835 (.x12 / .835)</a>
+            <a href="/api/download-zip/?type=both" style="display: block; padding: 10px 14px; font-size: 12px; color: var(--teal); font-weight: 700; text-decoration: none;">⚡ Download Both (MIR & 835)</a>
+          </div>
+        </div>
       </div>
       <p class="sub" style="margin-top: 4px; margin-bottom: 20px;">
         One row represents one 835 conversion set. The 835 input(s), optional 837 reference, MIR output, validation result, and processing result stay together.
@@ -1307,12 +1321,13 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
                 <th class="sortable" data-sort-key="claims" data-table="arch" style="font-size: 11px; letter-spacing: 0.05em;">CLAIMS <span class="sort-arrow">&udarr;</span></th>
                 <th class="sortable" data-sort-key="sftp" data-table="arch" style="font-size: 11px; letter-spacing: 0.05em;">SFTP STATUS <span class="sort-arrow">&udarr;</span></th>
                 <th class="sortable" data-sort-key="status" data-table="arch" style="font-size: 11px; letter-spacing: 0.05em;">STATUS <span class="sort-arrow">&udarr;</span></th>
+                <th style="font-size: 11px; letter-spacing: 0.05em;">SOURCE</th>
                 <th style="font-size: 11px; letter-spacing: 0.05em;">ACTION</th>
               </tr>
             </thead>
             <tbody id="archTableBody">
               <tr>
-                <td colspan="9" style="padding: 32px; text-align: center; color: var(--ink-3);">
+                <td colspan="10" style="padding: 32px; text-align: center; color: var(--ink-3);">
                   No conversion sets match these filters.
                 </td>
               </tr>
@@ -1475,12 +1490,10 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
             <!-- Submit Buttons -->
             <div style="display:flex; gap:10px; align-items:center;">
               <button type="button" id="btnTestSaveUnified" class="btn primary" style="padding: 9px 18px; font-size: 12.5px; font-weight: 600;">Test & save connection</button>
-              <!--
-              <button type="button" id="btnVerifyPaths" class="btn secondary" style="padding: 9px 16px; font-size: 12.5px; font-weight: 600; color: var(--teal); border-color: var(--teal);">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
-                <span>Connect & create paths</span>
+              <button type="button" id="btnStartBatchConnUnified" class="btn-gray" style="padding: 9px 18px; font-size: 12.5px; font-weight: 600;" title="Test SFTP Inbound Batch Conversion">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span>Test</span>
               </button>
-              -->
             </div>
           </div>
 
@@ -1710,9 +1723,6 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
     <div class="inline-viewer-body" style="padding: 16px; overflow: hidden; display: flex; flex-direction: column;">
       <!-- Breadcrumb & Nav Bar -->
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; background: #F4F6F8; padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px;">
-        <button type="button" id="sftpBrowserBtnBack" onclick="navigateSftpBack()" class="btn secondary" style="padding: 4px 12px; font-size: 13px; font-weight: 700; color: var(--ink-1);" title="Go Back" disabled>&larr;</button>
-        <button type="button" id="sftpBrowserBtnForward" onclick="navigateSftpForward()" class="btn secondary" style="padding: 4px 12px; font-size: 13px; font-weight: 700; color: var(--ink-1);" title="Go Forward" disabled>&rarr;</button>
-        <button type="button" id="sftpBrowserBtnUp" onclick="navigateSftpUp()" class="btn secondary" style="padding: 4px 10px; font-size: 11px;" title="Go Up Directory">&uarr; Up</button>
         <div style="flex: 1; display: flex; align-items: center; gap: 6px; font-family: var(--display); font-size: 12px; overflow-x: auto;">
           <span style="color: var(--ink-3); font-weight: 600;">Path:</span>
           <input type="text" id="sftpBrowserPathInput" value="/" style="flex: 1; min-width: 250px; padding: 4px 8px; font-size: 12px; font-family: var(--display); border: 1px solid var(--line); border-radius: 4px;">
@@ -1772,20 +1782,33 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
   if (drawerBackdrop) drawerBackdrop.addEventListener("click", closeDrawer);
 
   // --- NAVIGATION TAB SWITCHING ---
+  function switchTab(tab) {
+    if (!tab) return;
+    document.querySelectorAll('.navitem').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('on'));
+    const btn = document.querySelector(`.navitem[data-v="${tab}"]`);
+    if (btn) btn.classList.add('on');
+    const target = document.getElementById('v-' + tab);
+    if (target) target.classList.add('on');
+    if (tab === 'batches') loadTrackedFiles();
+    if (tab === 'archive') loadArchiveFiles();
+    if (tab === 'conn') loadSftpConfig();
+    try { localStorage.setItem("activeTab", tab); } catch (e) {}
+  }
+
   document.querySelectorAll('.navitem').forEach(b => {
     b.addEventListener('click', () => {
-      document.querySelectorAll('.navitem').forEach(x => x.classList.remove('on'));
-      document.querySelectorAll('.view').forEach(x => x.classList.remove('on'));
-      b.classList.add('on');
-      const target = document.getElementById('v-' + b.dataset.v);
-      if (target) target.classList.add('on');
-      if (b.dataset.v === 'batches') loadTrackedFiles();
-      if (b.dataset.v === 'archive') loadArchiveFiles();
-      if (b.dataset.v === 'conn') loadSftpConfig();
+      switchTab(b.dataset.v);
       window.scrollTo(0, 0);
       closeDrawer();
     });
   });
+
+  // Restore active tab on page refresh
+  try {
+    const savedTab = localStorage.getItem("activeTab");
+    if (savedTab) switchTab(savedTab);
+  } catch (e) {}
 
   // State management
   let activeValidatedFileId = null;
@@ -1977,7 +2000,7 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
         
         // Enable Step 3 Process MIR button
         btnProcessMIR.disabled = false;
-        btnProcessMIR.className = "btn success";
+        btnProcessMIR.className = "btn-gray";
         pillStep1.className = "step-pill done";
         pillStep2.className = "step-pill done";
         pillStep3.className = "step-pill active";
@@ -2072,6 +2095,76 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
       btnProcessMIR.disabled = false;
       btnProcessMIR.textContent = "Process MIR";
     }
+  }
+
+  // --- START AUTOMATED BATCH CONVERSION HANDLER ---
+  const btnStartBatch = document.getElementById("btnStartBatchConversion");
+  if (btnStartBatch) {
+    btnStartBatch.addEventListener("click", async () => {
+      btnStartBatch.disabled = true;
+      const labelSpan = btnStartBatch.querySelector("span");
+      if (labelSpan) labelSpan.textContent = "Testing...";
+      try {
+        const res = await fetch("/api/start-batch-conversion/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(data.message || `✓ Batch processing completed! Processed ${data.processed_count} files.`);
+          if (typeof loadAllDashboardData === "function") await loadAllDashboardData();
+        } else {
+          alert("Batch conversion failed: " + (data.error || "Unknown error"));
+        }
+      } catch (err) {
+        alert("Batch conversion error: " + err.message);
+      } finally {
+        btnStartBatch.disabled = false;
+        if (labelSpan) labelSpan.textContent = "Test";
+      }
+    });
+  }
+
+  const btnStartBatchUnified = document.getElementById("btnStartBatchConnUnified");
+  if (btnStartBatchUnified) {
+    btnStartBatchUnified.addEventListener("click", async () => {
+      btnStartBatchUnified.disabled = true;
+      const labelSpan = btnStartBatchUnified.querySelector("span");
+      if (labelSpan) labelSpan.textContent = "Testing...";
+      try {
+        const res = await fetch("/api/start-batch-conversion/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(data.message || `✓ Batch processing completed! Processed ${data.processed_count} files.`);
+          if (typeof loadAllDashboardData === "function") await loadAllDashboardData();
+        } else {
+          alert("Batch conversion failed: " + (data.error || "Unknown error"));
+        }
+      } catch (err) {
+        alert("Batch conversion error: " + err.message);
+      } finally {
+        btnStartBatchUnified.disabled = false;
+        if (labelSpan) labelSpan.textContent = "Test";
+      }
+    });
+  }
+
+  // --- ZIP ARCHIVE DROPDOWN TOGGLE ---
+  const btnZipToggle = document.getElementById("btnZipDropdownToggle");
+  const zipMenu = document.getElementById("zipDropdownMenu");
+  if (btnZipToggle && zipMenu) {
+    btnZipToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      zipMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!zipMenu.contains(e.target) && !btnZipToggle.contains(e.target)) {
+        zipMenu.classList.add("hidden");
+      }
+    });
   }
 
   // --- COPY & DOWNLOAD HANDLERS ---
@@ -2253,7 +2346,7 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
           <td class="num" style="color:var(--ink-3);">—</td>
           <td class="num">${f.claims_count || 0}</td>
           <td class="num" style="color:var(--ink-2);">${f.status === 'ARCHIVED' ? mirName : '—'}</td>
-          <td><span class="tag ${f.status === 'ARCHIVED' ? 'ok' : (f.status === 'ERROR' ? 'bad' : 'work')}">${f.status}</span></td>
+          <td><span class="tag ${f.status === 'ARCHIVED' ? 'ok' : (f.status === 'ERROR' ? 'bad' : 'work')}" ${f.status === 'PROCESSING' ? `style="cursor:pointer;" title="Click to convert file to MIR" onclick="convertFileByStatus('${f.id}')"` : ''}>${f.status}</span></td>
           <td class="num" style="font-size:11px; display:flex; align-items:center; gap:8px;">
             <button type="button" class="btn-eye" title="View / Edit Code" onclick="openFileViewerModal('${f.id}')">
               <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
@@ -2395,7 +2488,7 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
     if (archTotalSetsCount) archTotalSetsCount.textContent = filtered.length + " sets";
 
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="9" style="padding:32px; text-align:center; color:var(--ink-3);">No conversion sets match search query.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="padding:32px; text-align:center; color:var(--ink-3);">No conversion sets match search query.</td></tr>`;
       updateArchPagination(0, 1, pageSizeVal);
       return;
     }
@@ -2415,6 +2508,12 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
       const mirName = "MIR_" + baseName + ".mir";
 
       const isProcessed = f.status === 'ARCHIVED';
+
+      // Source Tag: SFTP or MANUAL
+      const isSftpSource = f.ingestion_source === 'SFTP';
+      const sourceText = isSftpSource ? 'SFTP' : 'MANUAL';
+      const sourceTagClass = isSftpSource ? 'ok' : 'work';
+      const sourceTitle = isSftpSource ? 'Ingested automatically from SFTP inbound folder' : 'Uploaded manually via conversion form';
 
       // Individual File SFTP Status: Driven by database present_in_sftp boolean
       const isSftpSuccess = Boolean(f.present_in_sftp);
@@ -2451,7 +2550,8 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
               ${sftpStatusText}
             </span>
           </td>
-          <td><span class="tag ${statusTagClass}">${displayStatus}</span></td>
+          <td><span class="tag ${statusTagClass}" ${f.status === 'PROCESSING' ? `style="cursor:pointer;" title="Click to convert file to MIR" onclick="convertFileByStatus('${f.id}')"` : ''}>${displayStatus}</span></td>
+          <td><span class="tag ${sourceTagClass}" style="font-size:10.5px;" title="${sourceTitle}">${sourceText}</span></td>
           <td class="num" style="font-size:11px; display:flex; align-items:center; gap:8px;">
             <button type="button" class="btn-eye" title="View / Edit Code" onclick="openFileViewerModal('${f.id}')">
               <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
@@ -2463,6 +2563,25 @@ ACTION=RESUBMIT AFTER CORRECTION WINDOW=15D</pre>
     }).join('');
 
     updateArchPagination(filtered.length, archCurrentPage, pageSizeVal);
+  }
+
+  async function convertFileByStatus(fileId) {
+    if (!fileId) return;
+    try {
+      const res = await fetch("/api/convert/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: fileId })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        alert(data.error || "Failed to convert file into MIR.");
+      } else {
+        fetchTrackedFilesData();
+      }
+    } catch (err) {
+      alert("Error converting file: " + err.message);
+    }
   }
 
   function updateArchPagination(totalItems, currentPage, pageSize) {

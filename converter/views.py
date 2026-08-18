@@ -46,6 +46,35 @@ def api_convert(request):
             file_id = request.POST.get('file_id')
 
     edi_text = edi_text.strip()
+    if not edi_text and file_id:
+        try:
+            from pathlib import Path
+            from django.conf import settings
+            from edi835.services import get_edi835_storage_dirs
+            rec = EDI835File.objects.get(id=file_id)
+            if rec.original_filename:
+                original_filename = rec.original_filename
+            dirs = get_edi835_storage_dirs()
+            possible_paths = []
+            if rec.input_path:
+                possible_paths.append(Path(settings.BASE_DIR) / rec.input_path)
+            if rec.archive_path:
+                possible_paths.append(Path(settings.BASE_DIR) / rec.archive_path)
+            if rec.stored_filename:
+                possible_paths.append(dirs["input"] / rec.stored_filename)
+                possible_paths.append(dirs["processing"] / rec.stored_filename)
+                possible_paths.append(dirs["archive"] / rec.stored_filename)
+
+            for p in possible_paths:
+                if os.path.exists(p) and os.path.isfile(p):
+                    with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read().strip()
+                    if content:
+                        edi_text = content
+                        break
+        except Exception:
+            pass
+
     if not edi_text:
         return JsonResponse({'error': 'Please provide EDI 835 text or upload a file.'}, status=400)
 
@@ -107,6 +136,16 @@ def api_validate(request):
         return JsonResponse({'error': 'Please provide EDI content to validate.'}, status=400)
 
     try:
+        from pathlib import Path
+        from django.conf import settings
+        from edi835.services import get_edi835_storage_dirs
+
+        dirs = get_edi835_storage_dirs()
+        archive_file_path = dirs["archive"] / original_filename
+        with open(archive_file_path, "w", encoding="utf-8") as f:
+            f.write(edi_text)
+        rel_archive_path = (Path("media") / "edi835" / "archive" / original_filename).as_posix()
+
         validator = EDI835Validator()
         report = validator.validate(edi_text)
 
@@ -122,6 +161,9 @@ def api_validate(request):
                 stored_filename=original_filename,
                 status="PROCESSING",
                 claims_count=claims_found,
+                archive_path=rel_archive_path,
+                input_path=rel_archive_path,
+                present_in_archive_folder=True,
             )
         else:
             err_msg = json.dumps(report.get("errors", ["Validation errors found"]))
@@ -131,6 +173,9 @@ def api_validate(request):
                 status="ERROR",
                 claims_count=claims_found,
                 error_message=err_msg,
+                archive_path=rel_archive_path,
+                input_path=rel_archive_path,
+                present_in_archive_folder=True,
             )
 
         return JsonResponse({
@@ -168,6 +213,78 @@ def download_mir(request):
 
     response = HttpResponse(mir_content, content_type='text/plain')
     response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+    return response
+
+
+@csrf_exempt
+def api_download_archive_zip(request):
+    """
+    API Endpoint: Creates and streams a ZIP file of archived files.
+    type parameter: 'mir' | '835' | 'both'
+    """
+    import io
+    import zipfile
+    from edi835.models import EDI835File
+    from edi835.services import get_edi835_storage_dirs
+
+    download_type = (request.GET.get("type") or "both").lower()
+    dirs = get_edi835_storage_dirs()
+    archive_dir = dirs["archive"]
+    output_dir = dirs["output"]
+
+    mem_zip = io.BytesIO()
+    added_files = set()
+
+    with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        records = EDI835File.objects.all()
+        for rec in records:
+            orig_name = rec.original_filename or rec.stored_filename
+            if not orig_name:
+                continue
+            base_name = os.path.splitext(orig_name)[0]
+
+            # 1. Include 835 EDI file if requested
+            if download_type in ["835", "both"]:
+                arch_path = archive_dir / orig_name
+                if os.path.exists(arch_path) and orig_name not in added_files:
+                    zf.write(arch_path, arcname=f"835_files/{orig_name}")
+                    added_files.add(orig_name)
+
+            # 2. Include MIR file if requested
+            if download_type in ["mir", "both"]:
+                mir_filename = f"MIR_{base_name}.mir"
+                mir_path = output_dir / f"{base_name}.mir"
+                if not os.path.exists(mir_path):
+                    mir_path = output_dir / mir_filename
+
+                if os.path.exists(mir_path) and mir_filename not in added_files:
+                    zf.write(mir_path, arcname=f"mir_files/{mir_filename}")
+                    added_files.add(mir_filename)
+
+        # Sweep output and archive directories for any physical files
+        if download_type in ["835", "both"] and os.path.exists(archive_dir):
+            for fname in os.listdir(archive_dir):
+                fpath = archive_dir / fname
+                if os.path.isfile(fpath) and fname not in added_files:
+                    zf.write(fpath, arcname=f"835_files/{fname}")
+                    added_files.add(fname)
+
+        if download_type in ["mir", "both"] and os.path.exists(output_dir):
+            for fname in os.listdir(output_dir):
+                fpath = output_dir / fname
+                if os.path.isfile(fpath) and fname.endswith(".mir") and fname not in added_files:
+                    zf.write(fpath, arcname=f"mir_files/{fname}")
+                    added_files.add(fname)
+
+    mem_zip.seek(0)
+    filename_map = {
+        "mir": "archive_mir_outputs.zip",
+        "835": "archive_835_inputs.zip",
+        "both": "archive_complete_bundle.zip"
+    }
+    zip_filename = filename_map.get(download_type, "archive_export.zip")
+    response = HttpResponse(mem_zip.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
     return response
 
 

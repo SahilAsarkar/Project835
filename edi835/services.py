@@ -99,7 +99,7 @@ def upload_mir_to_sftp(local_file_path, mir_filename):
 
 def push_file_record_to_sftp(file_id):
     """
-    Pushes both original 835 file and converted MIR file for a specific record ID to SFTP.
+    Pushes converted MIR file for a specific record ID to SFTP outbound folder.
     Returns (success_boolean, message_string).
     """
     from .models import SFTPConfig, EDI835File
@@ -116,19 +116,10 @@ def push_file_record_to_sftp(file_id):
         return False, "File record not found in database."
 
     dirs = get_edi835_storage_dirs()
-    success_835 = False
     success_mir = False
 
-    # 1. Push 835 file to SFTP 835 inbound folder
+    # Push MIR file to SFTP MIR outbound folder ONLY
     stored_name = rec.stored_filename or rec.original_filename
-    input_path = dirs["archive"] / stored_name
-    if not os.path.exists(input_path):
-        input_path = dirs["input"] / stored_name
-
-    if os.path.exists(input_path):
-        success_835 = upload_835_to_sftp(input_path, stored_name)
-
-    # 2. Push MIR file to SFTP MIR outbound folder
     if rec.output_path:
         base_name = os.path.splitext(stored_name)[0]
         mir_filename = f"MIR_{base_name}.mir"
@@ -139,79 +130,24 @@ def push_file_record_to_sftp(file_id):
         if os.path.exists(mir_path):
             success_mir = upload_mir_to_sftp(mir_path, mir_filename)
 
-    if success_835 or success_mir:
+    if success_mir:
         rec.present_in_sftp = True
         rec.save(update_fields=["present_in_sftp"])
-        return True, "Successfully pushed 835 and MIR files to remote SFTP server!"
+        return True, "Successfully pushed MIR file to remote SFTP outbound server!"
 
-    return False, "Failed to upload file to SFTP server. Check SFTP credentials and remote folder paths."
+    return False, "Failed to upload MIR file to SFTP outbound server. Check SFTP credentials and outbound folder path."
 
 
 def upload_835_to_sftp(local_file_path, filename):
     """
-    Uploads original 835 EDI file directly to the configured remote SFTP inbound folder.
+    Inbound SFTP folder is strictly for receiving 835 files.
+    We do NOT push 835 files to inbound SFTP folder.
     """
-    try:
-        from .models import SFTPConfig
-        import paramiko
-
-        cfg = SFTPConfig.objects.first()
-        if not cfg or cfg.status != "CONNECTED":
-            return False
-
-        in_host = cfg.host
-        in_port = cfg.port
-        in_user = cfg.username
-        in_pass = cfg.password
-        in_folder = cfg.inbound_835_folder or "/"
-
-        if not in_host or not in_user or not cfg.inbound_835_folder:
-            return False
-
-        ssh = paramiko.SSHClient()
-        if cfg.trust_unknown_key:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        ssh.connect(
-            hostname=in_host,
-            port=in_port,
-            username=in_user,
-            password=in_pass,
-            timeout=8,
-            banner_timeout=8,
-            auth_timeout=8,
-            look_for_keys=False,
-            allow_agent=False,
-        )
-        sftp = ssh.open_sftp()
-
-        # Ensure directory exists on remote SFTP server
-        p = in_folder.strip("/")
-        parts = p.split("/") if p else []
-        curr = ""
-        for part in parts:
-            curr += "/" + part
-            try:
-                sftp.stat(curr)
-            except FileNotFoundError:
-                try:
-                    sftp.mkdir(curr)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-
-        remote_path = f"{in_folder.rstrip('/')}/{filename}"
-        sftp.put(str(local_file_path), remote_path)
-
-        sftp.close()
-        ssh.close()
-        return True
-    except Exception:
-        return False
+    return False
 
 
 def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12", file_id=None):
+    edi_text = (edi_text or "").lstrip("\ufeff").strip()
     """
     Processes EDI 835 content through the complete pipeline when 'Submit & Convert to MIR' is triggered:
     1. Save to input/
@@ -231,9 +167,6 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
     input_file_path = dirs["input"] / stored_filename
     with open(input_file_path, "w", encoding="utf-8") as f:
         f.write(edi_text)
-
-    # Step 1b: Upload uploaded 835 EDI file directly to configured SFTP 835 inbound path
-    upload_835_to_sftp(input_file_path, stored_filename)
 
     relative_input_path = (Path("media") / "edi835" / "input" / stored_filename).as_posix()
 
@@ -365,7 +298,11 @@ def sync_folder_observer():
     for r in records:
         in_sftp = r.present_in_sftp
         if not in_sftp:
-            if r.stored_filename and os.path.exists(input_dir / r.stored_filename):
+            if r.output_path and os.path.exists(Path(settings.BASE_DIR) / r.output_path):
+                in_sftp = True
+            elif r.status in ["ARCHIVED", "COMPLETED"]:
+                in_sftp = True
+            elif r.stored_filename and os.path.exists(input_dir / r.stored_filename):
                 in_sftp = True
             elif r.original_filename and os.path.exists(input_dir / r.original_filename):
                 in_sftp = True

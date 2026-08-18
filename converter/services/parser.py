@@ -53,6 +53,7 @@ def put_field(buffer, start_1_based, length, value, align="left"):
         buffer[start_0 + i] = val[i]
 
 def parse_segments(text):
+    text = (text or "").lstrip("\ufeff").strip()
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     if "~" in normalized:
         raw = normalized.replace("\n", "").split("~")
