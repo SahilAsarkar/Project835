@@ -200,16 +200,54 @@ def api_validate(request):
 def download_mir(request):
     """
     Endpoint to trigger `.mir` file download.
+    Reads file content from disk/DB if mir_content payload is empty.
     """
     if request.method == 'POST':
         mir_content = request.POST.get('mir_content', '')
         file_name = request.POST.get('file_name', 'output.mir')
+        file_id = request.POST.get('file_id')
     else:
         mir_content = request.GET.get('mir_content', '')
         file_name = request.GET.get('file_name', 'output.mir')
+        file_id = request.GET.get('file_id')
 
     if not file_name.endswith('.mir'):
         file_name += '.mir'
+
+    if not mir_content:
+        try:
+            from edi835.models import EDI835File
+            from edi835.services import get_edi835_storage_dirs
+            from pathlib import Path
+            from django.conf import settings
+
+            dirs = get_edi835_storage_dirs()
+            rec = None
+            if file_id:
+                rec = EDI835File.objects.filter(id=file_id).first()
+            if not rec and file_name:
+                base_search = file_name.replace("MIR_", "").replace(".mir", "")
+                rec = EDI835File.objects.filter(original_filename__icontains=base_search).first()
+
+            if rec and rec.output_path:
+                abs_p = Path(settings.BASE_DIR) / rec.output_path
+                if os.path.exists(abs_p):
+                    with open(abs_p, "r", encoding="utf-8", errors="ignore") as f:
+                        mir_content = f.read()
+
+            if not mir_content and file_name:
+                out_p = dirs["output"] / file_name
+                if os.path.exists(out_p):
+                    with open(out_p, "r", encoding="utf-8", errors="ignore") as f:
+                        mir_content = f.read()
+
+            if not mir_content and file_name:
+                base_p = dirs["output"] / file_name.replace("MIR_", "")
+                if os.path.exists(base_p):
+                    with open(base_p, "r", encoding="utf-8", errors="ignore") as f:
+                        mir_content = f.read()
+        except Exception as e:
+            pass
 
     response = HttpResponse(mir_content, content_type='text/plain')
     response['Content-Disposition'] = f'attachment; filename="{file_name}"'

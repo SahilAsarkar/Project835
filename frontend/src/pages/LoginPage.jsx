@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { safeFetchJson } from "../utils/api";
 
 export default function LoginPage({ onLoginSuccess, onNavigate }) {
   const [email, setEmail] = useState("");
@@ -12,13 +13,12 @@ export default function LoginPage({ onLoginSuccess, onNavigate }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/accounts/api/login/", {
+      const { res, data } = await safeFetchJson("/accounts/api/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Sign in failed.");
       }

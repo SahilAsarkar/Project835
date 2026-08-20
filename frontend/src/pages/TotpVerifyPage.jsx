@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { safeFetchJson } from "../utils/api";
 
 export default function TotpVerifyPage({ onVerifySuccess }) {
   const [code, setCode] = useState("");
@@ -11,12 +12,11 @@ export default function TotpVerifyPage({ onVerifySuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/accounts/api/totp/verify/", {
+      const { res, data } = await safeFetchJson("/accounts/api/totp/verify/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       });
-      const data = await res.json();
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Invalid authenticator code.");

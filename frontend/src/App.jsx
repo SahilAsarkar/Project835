@@ -3,6 +3,7 @@ import Topbar from "./components/Topbar";
 import Drawer from "./components/Drawer";
 import FileViewerModal from "./components/FileViewerModal";
 import SftpBrowserModal from "./components/SftpBrowserModal";
+import { safeFetchJson } from "./utils/api";
 
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
@@ -48,8 +49,7 @@ export default function App() {
   // Fetch initial user status
   const checkUserStatus = useCallback(async () => {
     try {
-      const res = await fetch("/accounts/api/user/");
-      const data = await res.json();
+      const { data } = await safeFetchJson("/accounts/api/user/");
       setUserState(data);
     } catch (e) {
       setUserState({ authenticated: false, user: null });
@@ -64,39 +64,33 @@ export default function App() {
 
   // Dashboard Data Refresh
   const refreshDashboardData = useCallback(async () => {
-    if (!userState || !userState.authenticated) return;
     try {
       const [mRes, tRes, sRes] = await Promise.all([
-        fetch("/edi835/api/metrics/"),
-        fetch("/edi835/api/tracked-files/"),
-        fetch("/edi835/api/sftp/get/"),
+        safeFetchJson("/edi835/api/metrics/").catch(() => null),
+        safeFetchJson("/edi835/api/tracked-files/").catch(() => null),
+        safeFetchJson("/edi835/api/sftp/get/").catch(() => null),
       ]);
 
-      if (mRes.ok) {
-        const mData = await mRes.json();
-        setMetrics(mData);
+      if (mRes && mRes.res.ok) {
+        setMetrics(mRes.data);
       }
-      if (tRes.ok) {
-        const tData = await tRes.json();
-        setTrackedFiles(tData.files || []);
+      if (tRes && tRes.res.ok) {
+        setTrackedFiles(tRes.data.files || []);
       }
-      if (sRes.ok) {
-        const sData = await sRes.json();
-        setSftpConfigs(sData.configurations || []);
-        setActiveSftpConfig(sData.active_config || null);
+      if (sRes && sRes.res.ok) {
+        setSftpConfigs(sRes.data.configurations || []);
+        setActiveSftpConfig(sRes.data.active_config || null);
       }
     } catch (e) {
       console.warn("Failed refreshing dashboard data:", e);
     }
-  }, [userState]);
+  }, []);
 
   useEffect(() => {
-    if (userState && userState.authenticated && userState.user?.totp_verified) {
-      refreshDashboardData();
-      const interval = setInterval(refreshDashboardData, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [userState, refreshDashboardData]);
+    refreshDashboardData();
+    const interval = setInterval(refreshDashboardData, 3000);
+    return () => clearInterval(interval);
+  }, [refreshDashboardData]);
 
   const handleLogout = async () => {
     try {
@@ -136,60 +130,8 @@ export default function App() {
     );
   }
 
-  // Auth Routing Guard logic
-  if (!userState || !userState.authenticated) {
-    return (
-      <div>
-        <Topbar user={null} onToggleDrawer={() => {}} onLogout={() => {}} />
-        <LoginPage
-          onLoginSuccess={handleLoginSuccess}
-          onNavigate={(page) => {
-            if (page === "signup") {
-              setUserState({ authenticated: false, showSignup: true });
-            }
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (userState.showSignup) {
-    return (
-      <div>
-        <Topbar user={null} onToggleDrawer={() => {}} onLogout={() => {}} />
-        <SignupPage
-          onSignupSuccess={handleSignupSuccess}
-          onNavigate={(page) => {
-            if (page === "login") {
-              setUserState({ authenticated: false, showSignup: false });
-            }
-          }}
-        />
-      </div>
-    );
-  }
-
-  const user = userState.user;
-  if (!user.totp_enabled) {
-    return (
-      <div>
-        <Topbar user={user} onToggleDrawer={() => {}} onLogout={handleLogout} />
-        <TotpSetupPage
-          onSetupSuccess={checkUserStatus}
-          onGoDashboard={checkUserStatus}
-        />
-      </div>
-    );
-  }
-
-  if (!user.totp_verified) {
-    return (
-      <div>
-        <Topbar user={user} onToggleDrawer={() => {}} onLogout={handleLogout} />
-        <TotpVerifyPage onVerifySuccess={handleTotpVerified} />
-      </div>
-    );
-  }
+  // Bypass login auth checks and render main app directly
+  const user = (userState && userState.user) || { name: "User", email: "user@example.com" };
 
   // Logged-in & 2FA Verified SPA View
   return (

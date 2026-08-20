@@ -9,7 +9,7 @@ export default function ConnectionsView({
   const [sameServer, setSameServer] = useState(true);
 
   // Unified Mode State
-  const [uniHost, setUniHost] = useState("sftp.example.com");
+  const [uniHost, setUniHost] = useState("");
   const [uniPort, setUniPort] = useState("22");
   const [uniUser, setUniUser] = useState("");
   const [uniPass, setUniPass] = useState("");
@@ -28,7 +28,7 @@ export default function ConnectionsView({
   const lastOutPassRef = useRef("");
 
   // Dual Mode State - Inbound
-  const [inHost, setInHost] = useState("inbound.sftp.example.com");
+  const [inHost, setInHost] = useState("");
   const [inPort, setInPort] = useState("22");
   const [inUser, setInUser] = useState("");
   const [inPass, setInPass] = useState("");
@@ -38,7 +38,7 @@ export default function ConnectionsView({
   const [showInPass, setShowInPass] = useState(false);
 
   // Dual Mode State - Outbound
-  const [outHost, setOutHost] = useState("outbound.sftp.example.com");
+  const [outHost, setOutHost] = useState("");
   const [outPort, setOutPort] = useState("22");
   const [outUser, setOutUser] = useState("");
   const [outPass, setOutPass] = useState("");
@@ -87,28 +87,35 @@ export default function ConnectionsView({
 
   const [testResult, setTestResult] = useState(null);
 
+  const loadedConfigIdRef = useRef(null);
+
   useEffect(() => {
     if (activeConfig) {
-      setSameServer(activeConfig.use_same_server !== false);
-      if (activeConfig.use_same_server !== false) {
-        if (activeConfig.host) setUniHost(activeConfig.host);
-        if (activeConfig.port) setUniPort(String(activeConfig.port));
-        if (activeConfig.username) setUniUser(activeConfig.username);
-        if (activeConfig.auth_method) setUniAuth(activeConfig.auth_method);
-        if (activeConfig.inbound_837_folder) setUniDir837(activeConfig.inbound_837_folder);
-        if (activeConfig.inbound_835_folder) setUniDir835(activeConfig.inbound_835_folder);
-        if (activeConfig.outbound_mir_folder) setUniDirMir(activeConfig.outbound_mir_folder);
-      } else {
-        if (activeConfig.host) setInHost(activeConfig.host);
-        if (activeConfig.port) setInPort(String(activeConfig.port));
-        if (activeConfig.username) setInUser(activeConfig.username);
-        if (activeConfig.inbound_837_folder) setInDir837(activeConfig.inbound_837_folder);
-        if (activeConfig.inbound_835_folder) setInDir835(activeConfig.inbound_835_folder);
+      // Only populate state if this is a newly loaded config (id changed) or first load
+      const configKey = `${activeConfig.id}_${activeConfig.updated_at || ""}`;
+      if (loadedConfigIdRef.current !== configKey) {
+        loadedConfigIdRef.current = configKey;
+        setSameServer(activeConfig.use_same_server !== false);
+        if (activeConfig.use_same_server !== false) {
+          if (activeConfig.host !== undefined) setUniHost(activeConfig.host || "");
+          if (activeConfig.port !== undefined) setUniPort(activeConfig.port ? String(activeConfig.port) : "22");
+          if (activeConfig.username !== undefined) setUniUser(activeConfig.username || "");
+          if (activeConfig.auth_method !== undefined) setUniAuth(activeConfig.auth_method || "Password");
+          if (activeConfig.inbound_837_folder !== undefined) setUniDir837(activeConfig.inbound_837_folder || "");
+          if (activeConfig.inbound_835_folder !== undefined) setUniDir835(activeConfig.inbound_835_folder || "");
+          if (activeConfig.outbound_mir_folder !== undefined) setUniDirMir(activeConfig.outbound_mir_folder || "");
+        } else {
+          if (activeConfig.host !== undefined) setInHost(activeConfig.host || "");
+          if (activeConfig.port !== undefined) setInPort(activeConfig.port ? String(activeConfig.port) : "22");
+          if (activeConfig.username !== undefined) setInUser(activeConfig.username || "");
+          if (activeConfig.inbound_837_folder !== undefined) setInDir837(activeConfig.inbound_837_folder || "");
+          if (activeConfig.inbound_835_folder !== undefined) setInDir835(activeConfig.inbound_835_folder || "");
 
-        if (activeConfig.outbound_host) setOutHost(activeConfig.outbound_host);
-        if (activeConfig.outbound_port) setOutPort(String(activeConfig.outbound_port));
-        if (activeConfig.outbound_username) setOutUser(activeConfig.outbound_username);
-        if (activeConfig.outbound_mir_folder) setOutDirMir(activeConfig.outbound_mir_folder);
+          if (activeConfig.outbound_host !== undefined) setOutHost(activeConfig.outbound_host || "");
+          if (activeConfig.outbound_port !== undefined) setOutPort(activeConfig.outbound_port ? String(activeConfig.outbound_port) : "22");
+          if (activeConfig.outbound_username !== undefined) setOutUser(activeConfig.outbound_username || "");
+          if (activeConfig.outbound_mir_folder !== undefined) setOutDirMir(activeConfig.outbound_mir_folder || "");
+        }
       }
     }
   }, [activeConfig]);
@@ -592,7 +599,7 @@ export default function ConnectionsView({
               )}
 
               {/* Trust Key */}
-              <div style={{ marginBottom: "20px" }}>
+              <div style={{ marginBottom: "16px" }}>
                 <label
                   style={{
                     display: "flex",
@@ -610,6 +617,19 @@ export default function ConnectionsView({
                   />
                   <span>Trust an unknown host key during this local POC</span>
                 </label>
+              </div>
+
+              {/* Submit / Test & Save Connection Button */}
+              <div style={{ marginBottom: "24px" }}>
+                <button
+                  type="button"
+                  className="btn primary"
+                  style={{ padding: "9px 18px", fontSize: "12.5px", fontWeight: 600 }}
+                  onClick={handleTestSaveUnified}
+                  disabled={testingUni}
+                >
+                  {testingUni ? "Connecting..." : "Test & save connection"}
+                </button>
               </div>
 
               {/* Directories with Browse Buttons */}
@@ -799,47 +819,7 @@ export default function ConnectionsView({
                     </svg>
                   </button>
                 </div>
-              </div>
-
-              {/* Submit Button */}
-              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="btn primary"
-                  style={{ padding: "9px 18px", fontSize: "12.5px", fontWeight: 600 }}
-                  onClick={handleTestSaveUnified}
-                  disabled={testingUni}
-                >
-                  {testingUni ? "Connecting..." : "Test & save connection"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-gray"
-                  style={{ padding: "9px 18px", fontSize: "12.5px", fontWeight: 600 }}
-                  onClick={handleStartBatchConversion}
-                  disabled={startingBatch}
-                  title="Test SFTP Inbound Batch: Reads files from inbound SFTP folder, validates, archives, converts to MIR, uploads to outbound SFTP, and deletes original file from inbound SFTP."
-                >
-                  {startingBatch ? "Testing..." : "Test"}
-                </button>
-              </div>
-
-              {batchAlert && (
-                <div
-                  className={`status-banner ${batchAlert.type === "success" ? "valid" : "invalid"}`}
-                  style={{ marginTop: "14px" }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "13px" }}>
-                      {batchAlert.type === "success" ? "✓ SFTP Inbound Batch Pipeline Executed" : "✕ Batch Error"}
-                    </div>
-                    <div style={{ fontSize: "12px", marginTop: "2px" }}>
-                      {batchAlert.message}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>            </div>
           ) : (
             /* DUAL SFTP SETUP BOXES */
             <div>

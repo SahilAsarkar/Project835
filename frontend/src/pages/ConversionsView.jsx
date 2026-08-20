@@ -200,19 +200,28 @@ export default function ConversionsView({
   };
 
   // Download MIR File
-  const handleDownloadMir = (fileName, content) => {
+  const handleDownloadMir = (fileName, content, fileId) => {
     const textToDownload = content || mirOutputText;
-    if (!textToDownload) return;
 
     const form = document.createElement("form");
     form.method = "POST";
     form.action = "/api/download/";
 
-    const inputContent = document.createElement("input");
-    inputContent.type = "hidden";
-    inputContent.name = "mir_content";
-    inputContent.value = textToDownload;
-    form.appendChild(inputContent);
+    if (textToDownload) {
+      const inputContent = document.createElement("input");
+      inputContent.type = "hidden";
+      inputContent.name = "mir_content";
+      inputContent.value = textToDownload;
+      form.appendChild(inputContent);
+    }
+
+    if (fileId || activeValidatedFileId) {
+      const inputId = document.createElement("input");
+      inputId.type = "hidden";
+      inputId.name = "file_id";
+      inputId.value = fileId || activeValidatedFileId;
+      form.appendChild(inputId);
+    }
 
     const inputName = document.createElement("input");
     inputName.type = "hidden";
@@ -729,7 +738,7 @@ export default function ConversionsView({
                             type="button"
                             className="btn-download"
                             title="Download .mir File"
-                            onClick={() => handleDownloadMir(mirName, "")}
+                            onClick={() => handleDownloadMir(mirName, "", f.id)}
                           >
                             <svg viewBox="0 0 24 24">
                               <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />

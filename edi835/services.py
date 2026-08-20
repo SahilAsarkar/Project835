@@ -37,35 +37,55 @@ def upload_mir_to_sftp(local_file_path, mir_filename):
     """
     Uploads converted .mir file directly to the configured remote SFTP outbound folder.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
         from .models import SFTPConfig
         import paramiko
 
         cfg = SFTPConfig.objects.first()
-        if not cfg or cfg.status != "CONNECTED":
+        if not cfg:
+            logger.warning("upload_mir_to_sftp: No SFTPConfig found in database.")
             return False
 
-        out_host = cfg.outbound_host or cfg.host
-        out_port = cfg.outbound_port or cfg.port
-        out_user = cfg.outbound_username or cfg.username
-        out_pass = cfg.outbound_password or cfg.password
+        out_host = cfg.outbound_host if (not cfg.use_same_server and cfg.outbound_host) else cfg.host
+        out_port = int(cfg.outbound_port if (not cfg.use_same_server and cfg.outbound_port) else (cfg.port or 22))
+        out_user = cfg.outbound_username if (not cfg.use_same_server and cfg.outbound_username) else cfg.username
+        out_pass = cfg.outbound_password if (not cfg.use_same_server and cfg.outbound_password) else cfg.password
+        out_key = cfg.outbound_ssh_key if (not cfg.use_same_server and cfg.outbound_ssh_key) else cfg.ssh_key
+        out_auth = (cfg.outbound_auth_method if (not cfg.use_same_server and cfg.outbound_auth_method) else cfg.auth_method) or "Password"
         out_folder = cfg.outbound_mir_folder or "/"
 
         if not out_host or not out_user or not cfg.outbound_mir_folder:
+            logger.warning("upload_mir_to_sftp: Missing host, username, or outbound_mir_folder.")
             return False
 
         ssh = paramiko.SSHClient()
         if cfg.trust_unknown_key:
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            ssh.load_system_host_keys()
+
+        pkey = None
+        if out_auth in ["SSH Key", "SSH Key + Password"]:
+            try:
+                from .views import parse_ssh_private_key
+                pkey, _ = parse_ssh_private_key(out_key, password=out_pass)
+            except Exception as pk_err:
+                logger.warning(f"upload_mir_to_sftp: Error parsing SSH key: {pk_err}")
+
+        pass_val = out_pass if out_auth in ["Password", "SSH Key + Password"] else None
 
         ssh.connect(
             hostname=out_host,
             port=out_port,
             username=out_user,
-            password=out_pass,
-            timeout=8,
-            banner_timeout=8,
-            auth_timeout=8,
+            password=pass_val,
+            pkey=pkey,
+            timeout=10,
+            banner_timeout=10,
+            auth_timeout=10,
             look_for_keys=False,
             allow_agent=False,
         )
@@ -92,8 +112,10 @@ def upload_mir_to_sftp(local_file_path, mir_filename):
 
         sftp.close()
         ssh.close()
+        logger.info(f"upload_mir_to_sftp: Successfully pushed {mir_filename} to remote SFTP outbound folder {remote_path}")
         return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"upload_mir_to_sftp failed to upload {mir_filename}: {e}", exc_info=True)
         return False
 
 

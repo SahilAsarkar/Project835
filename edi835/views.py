@@ -1261,12 +1261,13 @@ def api_start_batch_conversion(request):
                         process_edi835_file_content(edi_content, original_filename=fname, file_id=str(db_rec.id))
                         
                         db_rec.refresh_from_db()
+                        uploaded_sftp = False
                         # Upload generated MIR to outbound SFTP folder
                         if db_rec.output_path:
                             abs_mir_path = Path(settings.BASE_DIR) / db_rec.output_path
                             base_name = fname.replace(".835", "").replace(".x12", "").replace(".edi", "")
                             mir_filename = f"MIR_{base_name}.mir"
-                            upload_mir_to_sftp(str(abs_mir_path), mir_filename)
+                            uploaded_sftp = upload_mir_to_sftp(str(abs_mir_path), mir_filename)
 
                         # Delete original 835 file from remote SFTP inbound folder
                         try:
@@ -1275,7 +1276,7 @@ def api_start_batch_conversion(request):
                             logger.warning(f"Could not remove remote SFTP file {remote_file_path}: {del_err}")
 
                         db_rec.status = "ARCHIVED"
-                        db_rec.present_in_sftp = True
+                        db_rec.present_in_sftp = uploaded_sftp
                         db_rec.save(update_fields=["status", "present_in_sftp"])
                         processed_files.append(fname)
                     else:
@@ -1331,11 +1332,12 @@ def api_start_batch_conversion(request):
                     if is_valid:
                         process_edi835_file_content(edi_content, original_filename=fname, file_id=str(db_rec.id))
                         db_rec.refresh_from_db()
+                        uploaded_sftp = False
                         if db_rec.output_path:
                             abs_mir_path = Path(settings.BASE_DIR) / db_rec.output_path
                             base_name = fname.replace(".835", "").replace(".x12", "").replace(".edi", "")
                             mir_filename = f"MIR_{base_name}.mir"
-                            upload_mir_to_sftp(str(abs_mir_path), mir_filename)
+                            uploaded_sftp = upload_mir_to_sftp(str(abs_mir_path), mir_filename)
 
                         # Delete from local input directory
                         try:
@@ -1344,7 +1346,7 @@ def api_start_batch_conversion(request):
                             pass
 
                         db_rec.status = "ARCHIVED"
-                        db_rec.present_in_sftp = True
+                        db_rec.present_in_sftp = uploaded_sftp
                         db_rec.save(update_fields=["status", "present_in_sftp"])
                         processed_files.append(fname)
                 except Exception as local_err:

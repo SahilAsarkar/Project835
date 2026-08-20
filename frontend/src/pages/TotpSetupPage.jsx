@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { safeFetchJson } from "../utils/api";
 
 export default function TotpSetupPage({ onSetupSuccess, onGoDashboard }) {
   const [loading, setLoading] = useState(true);
@@ -11,16 +12,15 @@ export default function TotpSetupPage({ onSetupSuccess, onGoDashboard }) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch("/accounts/api/totp/setup/")
-      .then((res) => res.json())
-      .then((data) => {
+    safeFetchJson("/accounts/api/totp/setup/")
+      .then(({ data }) => {
         if (data.qr_code) setQrCode(data.qr_code);
         if (data.secret) setSecret(data.secret);
         if (data.already_configured) setVerified(true);
         setLoading(false);
       })
       .catch((err) => {
-        setError("Failed to load 2FA setup details.");
+        setError("Failed to load 2FA setup details: " + err.message);
         setLoading(false);
       });
   }, []);
@@ -31,12 +31,11 @@ export default function TotpSetupPage({ onSetupSuccess, onGoDashboard }) {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/accounts/api/totp/setup/", {
+      const { res, data } = await safeFetchJson("/accounts/api/totp/setup/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       });
-      const data = await res.json();
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Invalid authenticator code.");

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { safeFetchJson } from "../utils/api";
 
 export default function SignupPage({ onSignupSuccess, onNavigate }) {
   const [name, setName] = useState("");
@@ -17,7 +18,7 @@ export default function SignupPage({ onSignupSuccess, onNavigate }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/accounts/api/signup/", {
+      const { res, data } = await safeFetchJson("/accounts/api/signup/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -29,7 +30,6 @@ export default function SignupPage({ onSignupSuccess, onNavigate }) {
         }),
       });
 
-      const data = await res.json();
       if (!res.ok || !data.success) {
         if (data.errors) {
           setErrors(data.errors);
