@@ -15,20 +15,37 @@ import ConversionsView from "./pages/ConversionsView";
 import NoticesView from "./pages/NoticesView";
 import ArchiveView from "./pages/ArchiveView";
 import ConnectionsView from "./pages/ConnectionsView";
+import AdminView from "./pages/AdminView";
 
 export default function App() {
   const [userState, setUserState] = useState(null); // { authenticated: bool, user: { name, email, totp_enabled, totp_verified } }
   const [loadingUser, setLoadingUser] = useState(true);
+  const [isAdminRoute, setIsAdminRoute] = useState(() => {
+    const path = window.location.pathname.toLowerCase();
+    return path.includes("adminstrator") || path.includes("administrator");
+  });
+
   const [activeTab, setActiveTab] = useState(() => {
     try {
-      return localStorage.getItem("activeTab") || "flow";
+      const saved = localStorage.getItem("activeTab");
+      return saved && saved !== "admin" ? saved : "flow";
     } catch (e) {
       return "flow";
     }
   });
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      setIsAdminRoute(path.includes("adminstrator") || path.includes("administrator"));
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   const handleTabChange = (tab) => {
+    if (tab === "admin") return;
     setActiveTab(tab);
     try {
       localStorage.setItem("activeTab", tab);
@@ -101,18 +118,6 @@ export default function App() {
     setUserState({ authenticated: false, user: null });
   };
 
-  const handleLoginSuccess = (data) => {
-    checkUserStatus();
-  };
-
-  const handleSignupSuccess = (data) => {
-    checkUserStatus();
-  };
-
-  const handleTotpVerified = () => {
-    checkUserStatus();
-  };
-
   if (loadingUser) {
     return (
       <div
@@ -130,10 +135,14 @@ export default function App() {
     );
   }
 
-  // Bypass login auth checks and render main app directly
   const user = (userState && userState.user) || { name: "User", email: "user@example.com" };
 
-  // Logged-in & 2FA Verified SPA View
+  // Standalone Admin Route View (/administrator or /adminstrator)
+  if (isAdminRoute) {
+    return <AdminView user={user} onLogout={handleLogout} />;
+  }
+
+  // Main Application View
   return (
     <div>
       <Topbar

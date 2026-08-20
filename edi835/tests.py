@@ -74,3 +74,25 @@ class EDI835PipelineLifecycleTestCase(TestCase):
         # 2. error/ folder contains the failed file with original filename
         err_file = self.dirs["error"] / original_name
         self.assertTrue(os.path.exists(err_file))
+
+    def test_multiple_files_single_mir(self):
+        from .services import process_multiple_edi835_files
+        files_list = [
+            {"filename": "file_a.835", "content": SAMPLE_835_VALID},
+            {"filename": "file_b.835", "content": SAMPLE_835_VALID.replace("CLM_PAYP_20260807", "CLM_PAYP_BATCH_2")},
+        ]
+        res = process_multiple_edi835_files(files_list)
+        self.assertTrue(res["success"])
+        self.assertEqual(res["files_count"], 2)
+        self.assertEqual(res["claims_count"], 2)
+        
+        # Verify single MIR file was created in output directory
+        output_file = self.dirs["output"] / res["combined_filename"]
+        self.assertTrue(os.path.exists(output_file))
+
+        # Check DB record
+        db_rec = res["db_record"]
+        self.assertEqual(db_rec.status, "ARCHIVED")
+        self.assertIn("file_a.835", db_rec.original_filename)
+        self.assertIn("file_b.835", db_rec.original_filename)
+

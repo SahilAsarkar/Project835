@@ -91,9 +91,13 @@ def parse_835(text, filename=None):
     current_claim = None
     current_service = None
 
+    delimiter = "*"
     segments = parse_segments(text)
     for segment in segments:
-        parts = segment.split("*")
+        if segment.startswith("ISA") and len(segment) >= 4:
+            delimiter = segment[3]
+
+        parts = segment.split(delimiter)
         tag = parts[0].strip().upper()
 
         if tag == "CLP":
@@ -133,6 +137,12 @@ def parse_835(text, filename=None):
                     current_claim["subscriber_id"] = parts[9].strip() if len(parts) > 9 else ""
                 elif len(parts) > 1:
                     current_claim["subscriber_id"] = parts[-1].strip()
+                if not current_claim["patient_last_name"] and len(parts) > 3:
+                    current_claim["patient_last_name"] = parts[3].strip()
+                if not current_claim["patient_first_name"] and len(parts) > 4:
+                    current_claim["patient_first_name"] = parts[4].strip()
+                if not current_claim["patient_middle"] and len(parts) > 5:
+                    current_claim["patient_middle"] = parts[5].strip()
         elif tag == "REF":
             ref_qual = parts[1].strip().upper() if len(parts) > 1 else ""
             if ref_qual == "1L":
@@ -352,8 +362,8 @@ def generate_mir_text(claims, filename=None):
                 rec += build_mir_service_block(svc, claim.get("status", ""), inherited_reason)
             records.append(rec)
 
-    # Join records cleanly without extra blank line gaps
-    text = "\n".join([r.strip() for r in records if r and r.strip()]) + ("\n" if records else "")
+    # Join records cleanly while preserving fixed-width line lengths
+    text = "\n".join([r.rstrip("\r\n") for r in records if r and r.strip()]) + ("\n" if records else "")
     return {
         "text": text,
         "claims_count": len(claims),

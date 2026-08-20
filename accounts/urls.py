@@ -11,6 +11,15 @@ from .views import (
     api_totp_setup,
     api_totp_verify,
     api_logout,
+    api_admin_clients,
+    api_admin_create_client,
+    api_admin_update_client,
+    api_admin_delete_client,
+    api_admin_stats,
+    api_admin_users,
+    api_admin_create_user,
+    api_admin_update_user,
+    api_admin_delete_user,
 )
 
 urlpatterns = [
@@ -25,5 +34,15 @@ urlpatterns = [
     path("api/totp/setup/", api_totp_setup, name="api_totp_setup"),
     path("api/totp/verify/", api_totp_verify, name="api_totp_verify"),
     path("api/logout/", api_logout, name="api_logout"),
+    # Admin Panel API Endpoints
+    path("api/admin/clients/", api_admin_clients, name="api_admin_clients"),
+    path("api/admin/clients/create/", api_admin_create_client, name="api_admin_create_client"),
+    path("api/admin/clients/<uuid:client_id>/update/", api_admin_update_client, name="api_admin_update_client"),
+    path("api/admin/clients/<uuid:client_id>/delete/", api_admin_delete_client, name="api_admin_delete_client"),
+    path("api/admin/stats/", api_admin_stats, name="api_admin_stats"),
+    path("api/admin/users/", api_admin_users, name="api_admin_users"),
+    path("api/admin/users/create/", api_admin_create_user, name="api_admin_create_user"),
+    path("api/admin/users/<int:user_id>/update/", api_admin_update_user, name="api_admin_update_user"),
+    path("api/admin/users/<int:user_id>/delete/", api_admin_delete_user, name="api_admin_delete_user"),
 ]
 

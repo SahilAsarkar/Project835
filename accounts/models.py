@@ -1,5 +1,46 @@
+import uuid
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
+
+
+class Client(models.Model):
+    STATUS_CHOICES = [
+        ("ACTIVE", "Active"),
+        ("INACTIVE", "Inactive"),
+    ]
+
+    STAGE_CHOICES = [
+        ("onboarding", "Onboarding"),
+        ("onboarding_completed", "Onboarding Completed"),
+        ("golive_pending", "Go Live Pending"),
+        ("production_pending", "Production Pending"),
+        ("production", "Production"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, help_text="Client / Organization Name")
+    client_code = models.CharField(max_length=50, unique=True, help_text="Unique Client Identifier")
+    email = models.EmailField(help_text="Primary Contact Email")
+    phone = models.CharField(max_length=50, blank=True, null=True, help_text="Contact Phone")
+    address = models.TextField(blank=True, null=True, help_text="Physical / Billing Address")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
+    notes = models.TextField(blank=True, null=True, help_text="Administrative notes")
+    
+    claims_system = models.CharField(max_length=100, default="Vendor Hosted", help_text="Claims System (e.g., Epic, Facets)")
+    owner = models.CharField(max_length=100, blank=True, null=True, help_text="Assigned admin user")
+    stage = models.CharField(max_length=50, choices=STAGE_CHOICES, default="onboarding")
+    progress_pct = models.IntegerField(default=0, help_text="Onboarding progress percentage (0-100)")
+    live_since = models.DateTimeField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "client"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.client_code})"
 
 
 class UserManager(BaseUserManager):
@@ -36,6 +77,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150)
     mobile = models.CharField(max_length=20, unique=True)
+    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="users")
 
     # TOTP secret
     totp_secret = models.CharField(max_length=64, blank=True, null=True)

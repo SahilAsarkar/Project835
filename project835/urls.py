@@ -20,7 +20,12 @@ from home.views import home_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("administrator/", home_view, name="administrator_route"),
+    path("administrator", home_view),
+    path("adminstrator/", home_view, name="adminstrator_route"),
+    path("adminstrator", home_view),
     path("accounts/", include("accounts.urls")),
+    path("admin-panel/", include("admin_panel.urls")),
     path("home/", include("home.urls")),
     path("edi835/", include("edi835.urls")),
     path("", include("converter.urls")),

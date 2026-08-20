@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "home",
     "converter",
     "edi835",
+    "admin_panel",
 ]
 
 

@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:8000',
       '/accounts': 'http://127.0.0.1:8000',
       '/edi835': 'http://127.0.0.1:8000',
+      '/admin-panel/api': 'http://127.0.0.1:8000',
     }
   },
   build: {

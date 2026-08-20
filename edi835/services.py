@@ -168,7 +168,7 @@ def upload_835_to_sftp(local_file_path, filename):
     return False
 
 
-def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12", file_id=None):
+def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12", file_id=None, ingestion_source="MANUAL"):
     edi_text = (edi_text or "").lstrip("\ufeff").strip()
     """
     Processes EDI 835 content through the complete pipeline when 'Submit & Convert to MIR' is triggered:
@@ -206,12 +206,15 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
             original_filename=original_filename,
             stored_filename=stored_filename,
             status="UPLOADED",
-            input_path=relative_input_path
+            input_path=relative_input_path,
+            ingestion_source=ingestion_source
         )
     else:
         db_record.original_filename = original_filename
         db_record.stored_filename = stored_filename
         db_record.input_path = relative_input_path
+        if ingestion_source and ingestion_source != "MANUAL":
+            db_record.ingestion_source = ingestion_source
 
     # Step 2: Move file from input/ to processing/ (input/ folder becomes empty)
     processing_file_path = dirs["processing"] / stored_filename
@@ -282,7 +285,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
         }
 
 
-def process_multiple_edi835_files(files_list):
+def process_multiple_edi835_files(files_list, ingestion_source="SFTP"):
     """
     Takes a list of file items: [ {"filename": "f1.835", "content": "..."}, {"filename": "f2.835", "content": "..."} ]
     Parses claims from all 835 files, combines them into a SINGLE MIR output file,
@@ -333,7 +336,6 @@ def process_multiple_edi835_files(files_list):
     # Generate ONE single combined MIR file from all claims across all input 835 files
     mir_res = generate_mir_text(all_claims, filename=file_names[0] if file_names else None)
     mir_text = mir_res["text"]
-    mir_text = mir_res["text"]
 
     first_base_name = os.path.splitext(file_names[0])[0] if file_names else "batch"
     combined_base_name = f"MIR_COMBINED_{first_base_name}" if len(file_names) > 1 else f"MIR_{first_base_name}"
@@ -362,6 +364,7 @@ def process_multiple_edi835_files(files_list):
         archive_path=first_archive_rel_path,
         present_in_sftp=sftp_uploaded,
         present_in_archive_folder=True,
+        ingestion_source=ingestion_source,
         processing_completed_at=timezone.now()
     )
 
@@ -410,6 +413,7 @@ def sync_folder_observer():
                         input_path=rel_input_path,
                         present_in_sftp=True,
                         present_in_archive_folder=False,
+                        ingestion_source="SFTP",
                     )
 
     # 2. Sync physical disk existence for all DB records

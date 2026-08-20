@@ -11,7 +11,7 @@ export default function Drawer({ isOpen, activeTab, onSelectTab, onClose }) {
       ></div>
 
       {/* Left-to-Right Drawer Navigation Panel */}
-      <nav className={`rail ${isOpen ? "open" : ""}`} id="navDrawer">
+      <nav className={`client-drawer ${isOpen ? "open" : ""}`} id="navDrawer">
         <div className="drawer-header">
           <h3>NAVIGATION</h3>
           <button

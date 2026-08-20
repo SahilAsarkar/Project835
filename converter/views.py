@@ -400,18 +400,26 @@ def api_download_archive_zip(request):
                     added_files.add(fname)
 
     mem_zip.seek(0)
-    filename_map = {
-        "mir": "archive_mir_outputs.zip",
-        "835": "archive_835_inputs.zip",
-        "both": "archive_complete_bundle.zip"
-    }
-    zip_filename = filename_map.get(download_type, "archive_export.zip")
-    response = HttpResponse(mem_zip.getvalue(), content_type="application/zip")
-    response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
+
+    if not os.path.exists(archive_dir):
+        return JsonResponse({"error": "Archive directory does not exist."}, status=404)
+
+    files = [f for f in os.listdir(archive_dir) if os.path.isfile(archive_dir / f) and not f.startswith(".")]
+    if not files:
+        return JsonResponse({"error": "No files found in archive folder."}, status=404)
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fname in files:
+            fpath = archive_dir / fname
+            zf.write(fpath, arcname=fname)
+
+    zip_buffer.seek(0)
+    response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = 'attachment; filename="edi835_archive_files.zip"'
     return response
 
 
-@csrf_exempt
 def api_get_file_content(request, file_id):
     """
     API Endpoint: Fetch 835 EDI content and generated MIR text for a given file_id.
@@ -421,38 +429,76 @@ def api_get_file_content(request, file_id):
     except (EDI835File.DoesNotExist, ValueError):
         return JsonResponse({"error": "File record not found."}, status=404)
 
+    from pathlib import Path
+    from django.conf import settings
     from edi835.services import get_edi835_storage_dirs
     dirs = get_edi835_storage_dirs()
 
     # 1. Fetch 835 content
     edi_text = ""
-    paths_to_check = [
-        dirs["archive"] / db_rec.stored_filename if db_rec.stored_filename else None,
-        dirs["archive"] / db_rec.original_filename if db_rec.original_filename else None,
-        dirs["processing"] / db_rec.stored_filename if db_rec.stored_filename else None,
-        dirs["input"] / db_rec.stored_filename if db_rec.stored_filename else None,
-        dirs["error"] / db_rec.stored_filename if db_rec.stored_filename else None,
-    ]
+    paths_to_check = []
+    if db_rec.archive_path:
+        paths_to_check.append(Path(settings.BASE_DIR) / db_rec.archive_path)
+    if db_rec.input_path:
+        paths_to_check.append(Path(settings.BASE_DIR) / db_rec.input_path)
+
+    # Check if multiple file names exist in original_filename (e.g. "f1.835, f2.835")
+    raw_names = [n.strip() for n in (db_rec.original_filename or "").split(",") if n.strip()]
+    for fn in raw_names:
+        paths_to_check.append(dirs["archive"] / fn)
+        paths_to_check.append(dirs["input"] / fn)
+
+    if db_rec.stored_filename:
+        paths_to_check.extend([
+            dirs["archive"] / db_rec.stored_filename,
+            dirs["processing"] / db_rec.stored_filename,
+            dirs["input"] / db_rec.stored_filename,
+            dirs["error"] / db_rec.stored_filename,
+        ])
+
+    edi_texts = []
+    seen_paths = set()
     for p in paths_to_check:
-        if p and os.path.exists(p):
+        if p and p not in seen_paths and os.path.exists(p) and os.path.isfile(p):
+            seen_paths.add(p)
             try:
                 with open(p, "r", encoding="utf-8", errors="ignore") as f:
-                    edi_text = f.read()
-                break
+                    txt = f.read().strip()
+                if txt:
+                    edi_texts.append(txt)
             except Exception:
                 pass
 
+    edi_text = "\n\n".join(edi_texts) if edi_texts else ""
+
     # 2. Fetch MIR content
     mir_text = ""
-    base_name = os.path.splitext(db_rec.original_filename)[0] if db_rec.original_filename else "file"
-    mir_filename = f"{base_name}.mir"
-    mir_path = dirs["output"] / mir_filename
-    if os.path.exists(mir_path):
-        try:
-            with open(mir_path, "r", encoding="utf-8", errors="ignore") as f:
-                mir_text = f.read()
-        except Exception:
-            pass
+    mir_paths = []
+    if db_rec.output_path:
+        mir_paths.append(Path(settings.BASE_DIR) / db_rec.output_path)
+        mir_paths.append(dirs["output"] / os.path.basename(db_rec.output_path))
+
+    for fn in raw_names:
+        bname = os.path.splitext(fn)[0]
+        mir_paths.append(dirs["output"] / f"{bname}.mir")
+        mir_paths.append(dirs["output"] / f"MIR_{bname}.mir")
+        mir_paths.append(dirs["output"] / f"MIR_COMBINED_{bname}.mir")
+
+    if db_rec.stored_filename:
+        bname = os.path.splitext(db_rec.stored_filename)[0]
+        mir_paths.append(dirs["output"] / f"{bname}.mir")
+        mir_paths.append(dirs["output"] / f"MIR_{bname}.mir")
+        mir_paths.append(dirs["output"] / f"MIR_COMBINED_{bname}.mir")
+
+    for mp in mir_paths:
+        if mp and os.path.exists(mp) and os.path.isfile(mp):
+            try:
+                with open(mp, "r", encoding="utf-8", errors="ignore") as f:
+                    mir_text = f.read()
+                if mir_text:
+                    break
+            except Exception:
+                pass
 
     # If MIR text doesn't exist on disk but we have 835 text, try parsing on the fly
     if not mir_text and edi_text:

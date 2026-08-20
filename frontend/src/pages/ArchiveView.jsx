@@ -398,11 +398,12 @@ export default function ArchiveView({
                   onClick={() => handleSortHeader("sftp")}
                   style={{ fontSize: "11px", letterSpacing: "0.05em" }}
                 >
-                  SFTP STATUS{" "}
+                  IMPORT MODE{" "}
                   <span className="sort-arrow">
                     {sortKey === "sftp" ? (sortOrder === "asc" ? "↑" : "↓") : "⇅"}
                   </span>
                 </th>
+                <th style={{ fontSize: "11px", letterSpacing: "0.05em" }}>SFTP PUSH</th>
                 <th
                   className={`sortable ${sortKey === "status" ? sortOrder : ""}`}
                   onClick={() => handleSortHeader("status")}
@@ -413,7 +414,6 @@ export default function ArchiveView({
                     {sortKey === "status" ? (sortOrder === "asc" ? "↑" : "↓") : "⇅"}
                   </span>
                 </th>
-                <th style={{ fontSize: "11px", letterSpacing: "0.05em" }}>SOURCE</th>
                 <th style={{ fontSize: "11px", letterSpacing: "0.05em" }}>ACTION</th>
               </tr>
             </thead>
@@ -479,7 +479,11 @@ export default function ArchiveView({
                     statusTitle = `${displayStatus}: Status of 835 conversion set.`;
                   }
 
-                  const isSftpSource = f.ingestion_source === "SFTP";
+                  const isSftpSource =
+                    f.ingestion_source === "SFTP" ||
+                    (f.original_filename && f.original_filename.includes(",")) ||
+                    (f.input_path && f.input_path.toLowerCase().includes("sftp"));
+
                   const sourceLabel = isSftpSource ? "SFTP" : "MANUAL";
                   const sourceTagClass = isSftpSource ? "ok" : "work";
                   const sourceTitle = isSftpSource

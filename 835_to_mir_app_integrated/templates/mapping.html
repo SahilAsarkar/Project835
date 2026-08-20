@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MIR Relay — Simple Mapping · Sources Visible Configuration</title>
+<style>
+:root{
+  --ink:#172230;--muted:#64748b;--line:#d8e0e8;--soft:#f5f7f9;--white:#fff;
+  --green:#13745d;--green-bg:#e8f4f0;--amber:#9a6812;--amber-bg:#fbf4e5;
+  --blue:#315f86;--blue-bg:#eaf1f7;--red:#9a3d35;--red-bg:#f8e9e7;
+  --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Menlo,Consolas,monospace;
+  --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#eef2f5;color:var(--ink);font:14px/1.45 var(--sans)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.top{height:58px;background:var(--ink);color:#fff;display:flex;align-items:center;padding:0 22px;gap:14px;position:sticky;top:0;z-index:20}
+.brand{font:600 13px var(--mono);letter-spacing:.17em;text-transform:uppercase}
+.brand span{color:#8ea0b2;font-weight:400}
+.spacer{flex:1}
+.status{font-size:12px;color:#c5d0db}
+.status b{color:#75d1b5}
+.page{max-width:1380px;margin:0 auto;padding:22px}
+.head{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}
+.head h1{font-size:24px;margin:0 0 4px}
+.head p{margin:0;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--white);padding:8px 12px;border-radius:6px;font-size:12.5px}
+.btn:hover{border-color:#9fb0c0}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.pill{background:#fff;border:1px solid var(--line);padding:7px 10px;border-radius:999px;font-size:12px}
+.pill.ok{background:var(--green-bg);border-color:#c7e1d8;color:var(--green)}
+.pill.warn{background:var(--amber-bg);border-color:#ead7ae;color:var(--amber)}
+.filters{display:grid;grid-template-columns:minmax(260px,1fr) 220px 220px;gap:10px;background:#fff;border:1px solid var(--line);border-bottom:none;padding:12px;border-radius:8px 8px 0 0}
+.control{width:100%;border:1px solid var(--line);background:#fff;padding:9px 10px;border-radius:6px;outline:none}
+.control:focus{border-color:#8ca2b7}
+.tablewrap{background:#fff;border:1px solid var(--line);border-radius:0 0 8px 8px;overflow:auto;position:relative}
+table{width:100%;border-collapse:collapse;min-width:980px}
+th{text-align:left;font:10px var(--mono);text-transform:uppercase;letter-spacing:.09em;color:#7a8898;padding:10px 12px;border-bottom:1px solid var(--line);background:#fafbfc;position:sticky;top:0;z-index:2}
+td{padding:11px 12px;border-bottom:1px solid #edf0f3;vertical-align:middle;font-size:12.5px}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafcfd}
+.mono{font-family:var(--mono)}
+.fieldid{font:600 11px var(--mono)}
+.name{font-weight:600}
+.descdot{display:inline-block;margin-left:5px;color:#8898a8;cursor:help}
+.meta{color:var(--muted);font:11px var(--mono);white-space:nowrap}
+.maptype{display:inline-block;border-radius:999px;padding:3px 8px;font:10px var(--mono);white-space:nowrap}
+.direct{background:var(--blue-bg);color:var(--blue)} .formula{background:#f0ebf7;color:#6b4c8d}
+.constant{background:var(--amber-bg);color:var(--amber)} .system{background:var(--green-bg);color:var(--green)} .blank{background:#eef1f4;color:#687789}
+.source{font:11.5px var(--mono);max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.changed{color:var(--amber);font:10px var(--mono);margin-left:6px}
+.empty{padding:36px;text-align:center;color:var(--muted)}
+
+.scrim{position:fixed;inset:0;background:rgba(15,27,39,.35);display:none;z-index:40}
+.scrim.on{display:block}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:min(560px,96vw);background:#fff;z-index:50;transform:translateX(100%);transition:.18s ease;display:flex;flex-direction:column;box-shadow:-18px 0 45px rgba(0,0,0,.12)}
+.drawer.on{transform:none}
+.drawerhead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.drawerhead h2{font-size:18px;margin:2px 0 2px}
+.close{margin-left:auto;border:0;background:none;font-size:24px;color:#8090a0;padding:0 4px}
+.body{padding:18px 20px;overflow:auto;flex:1}
+.specrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.spec{background:var(--soft);padding:9px 10px;border-radius:6px}
+.spec .k{font:9px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:#8290a0}
+.spec .v{font:600 12px var(--mono);margin-top:3px}
+.description{color:var(--muted);font-size:12.5px;margin:0 0 18px}
+.group{margin-bottom:16px}
+.group label.title{display:block;font-weight:600;font-size:12px;margin-bottom:6px}
+.help{font-size:11px;color:#8794a2;margin-top:5px}
+textarea.control{min-height:92px;resize:vertical;font:12px/1.5 var(--mono)}
+.inline{display:flex;gap:8px}
+.inline > *{flex:1}
+.note{padding:10px 11px;border-radius:6px;background:var(--soft);font-size:12px;color:#536274}
+.note.ok{background:var(--green-bg);color:var(--green)}
+.note.warn{background:var(--amber-bg);color:var(--amber)}
+details{border:1px solid var(--line);border-radius:7px;margin-top:18px}
+summary{padding:11px 12px;cursor:pointer;font-weight:600;font-size:12px}
+.advanced{padding:0 12px 12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.checks{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;color:#5e6d7c;font-size:12px}
+.preview{margin-top:16px;border-top:1px solid var(--line);padding-top:15px}
+.pre{font:11px/1.55 var(--mono);background:#172230;color:#e2e8ef;padding:10px;border-radius:6px;white-space:pre-wrap;word-break:break-word}
+.output{margin-top:8px;font:12px var(--mono);padding:10px;background:var(--green-bg);border-radius:6px;white-space:pre;overflow:auto}
+.drawerfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.drawerfoot .leftbtn{margin-right:auto}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 13px;border-radius:6px;font-size:12px;display:none;z-index:80}
+.toast.on{display:block}
+@media(max-width:850px){
+  .filters{grid-template-columns:1fr}
+  .head{display:block} .actions{margin-top:12px}
+  .specrow{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand">MIR Relay <span>/ Mapping</span></div>
+  <div class="spacer"></div>
+  <div class="status"><b>●</b> Default mappings = current converter baseline</div>
+</div>
+
+<main class="page">
+  <div class="head">
+    <div>
+      <h1>MIR Mapping Configuration</h1>
+      <p>Review each MIR field and change its source only when the specification or business rule changes.</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="actions">
+      <a class="btn" href="/" style="text-decoration:none">← 835 Converter</a>
+      <button class="btn" id="checkBtn">Check mappings</button>
+      <button class="btn" id="resetAllBtn">Reset all to baseline</button>
+      <button class="btn primary" id="saveBtn">Save & use</button>
+    </div>
+  </div>
+
+  <div class="summary">
+    <span class="pill" id="totalPill"></span>
+    <span class="pill ok" id="baselinePill">✓ Same as current converter</span>
+    <span class="pill" id="changedPill">0 changed</span>
+  </div>
+
+  <div class="filters">
+    <input id="search" class="control" placeholder="Search MIR field or meaning">
+    <select id="sectionFilter" class="control"><option value="">All MIR sections</option></select>
+    <select id="typeFilter" class="control">
+      <option value="">All mapping types</option>
+      <option>Direct from 835</option><option>Formula</option><option>Hardcoded Text</option><option>System / Runtime</option><option>Blank</option>
+    </select>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th>MIR field</th><th>Meaning</th><th>Type / Size</th><th>Position</th><th>Mapping type</th><th>Current mapping</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawerhead">
+    <div>
+      <div class="fieldid" id="dId"></div>
+      <h2 id="dName"></h2>
+      <div class="meta" id="dSection"></div>
+    </div>
+    <button class="close" id="closeBtn">×</button>
+  </div>
+  <div class="body">
+    <div class="specrow">
+      <div class="spec"><div class="k">Spec type</div><div class="v" id="dType"></div></div>
+      <div class="spec"><div class="k">Size</div><div class="v" id="dLength"></div></div>
+      <div class="spec"><div class="k">Position</div><div class="v" id="dPosition"></div></div>
+    </div>
+    <p class="description" id="dDesc"></p>
+
+    <div class="group">
+      <label class="title">How is this MIR field populated?</label>
+      <select id="mapType" class="control">
+        <option>Direct from 835</option><option>Formula</option><option>Hardcoded Text</option><option>System / Runtime</option><option>Blank</option>
+      </select>
+    </div>
+
+    <div id="directBox">
+      <div class="group">
+        <label class="title">835 field</label>
+        <select id="sourceSelect" class="control"></select>
+        <div class="help" id="sourceHelp"></div>
+      </div>
+      <div class="group">
+        <label class="title">If 835 value is missing</label>
+        <div class="inline">
+          <select id="fallbackType" class="control"><option value="Blank">Leave blank</option><option value="Hardcoded">Use fixed value</option></select>
+          <input id="fallbackValue" class="control mono" placeholder="Fixed fallback">
+        </div>
+      </div>
+    </div>
+
+    <div id="formulaBox" style="display:none">
+      <div class="group">
+        <label class="title">Formula / Calculation</label>
+        <textarea id="formulaValue" class="control" spellcheck="false"></textarea>
+        <div class="inline" style="margin-top:7px">
+          <select id="tokenSelect" class="control"></select>
+          <button class="btn" id="insertTokenBtn" type="button">Insert</button>
+        </div>
+        <div class="help">The formula stays in simple language. The exact 835 segments/elements used are shown below.</div>
+        <div class="formula-source" style="margin-top:10px;padding:10px 12px;background:#f7f9fb;border:1px solid var(--line);border-radius:3px">
+          <div class="title" style="margin-bottom:6px">835 values used in this formula</div>
+          <div id="formulaSourceHelp" class="help" style="font-size:12.5px;line-height:1.65;color:var(--ink)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="constantBox" style="display:none">
+      <div class="group">
+        <label class="title">Hardcoded text/value</label>
+        <input id="constantValue" class="control mono">
+      </div>
+    </div>
+
+    <div id="systemBox" style="display:none">
+      <div class="group">
+        <label class="title">System value</label>
+        <select id="systemValue" class="control">
+          <option value="PROCESS_DATE">Processing Date (YYYYMMDD)</option>
+          <option value="RECORD_SEQUENCE">MIR Record Sequence</option>
+          <option value="MAX_RECORD_SEQUENCE">Maximum Record Sequence</option>
+          <option value="SERVICE_COUNT">Service Count</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="blankBox" style="display:none" class="note">
+      Keep this MIR field blank. Its fixed-width space is still preserved.
+    </div>
+
+    <details>
+      <summary>MIR field details & formatting</summary>
+      <div class="advanced">
+        <div class="grid2">
+          <div class="group"><label class="title">Start position</label><input id="startValue" type="number" min="1" class="control mono"></div>
+          <div class="group"><label class="title">Field size</label><input id="lengthValue" type="number" min="1" class="control mono"></div>
+          <div class="group"><label class="title">Alignment</label><select id="alignValue" class="control"><option value="left">Left</option><option value="right">Right</option></select></div>
+          <div class="group"><label class="title">Pad character</label><input id="padValue" maxlength="1" class="control mono"></div>
+        </div>
+        <div class="checks">
+          <label><input id="upperValue" type="checkbox"> Uppercase</label>
+          <label><input id="trimValue" type="checkbox"> Trim</label>
+          <label><input id="truncateValue" type="checkbox"> Truncate to field size</label>
+        </div>
+        <div class="group" id="technicalRuleBox" style="display:none;margin-top:12px">
+          <label class="title">Technical rule (developer reference)</label>
+          <div class="pre mono" id="technicalRuleValue"></div>
+        </div>
+      </div>
+    </details>
+
+    <div class="preview">
+      <div class="fieldid">EXAMPLE</div>
+      <div class="pre" id="sampleInput"></div>
+      <div class="output" id="sampleOutput"></div>
+      <div class="help" id="previewHelp"></div>
+    </div>
+  </div>
+  <div class="drawerfoot">
+    <button class="btn leftbtn" id="resetFieldBtn">Reset field</button>
+    <button class="btn primary" id="doneBtn">Done</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SOURCES=[
+  {id:'CLP01',label:'CLP01 — Claim Submitter Identifier / Claim Number',rule:'Claim loop: CLP01'},
+  {id:'CLP02',label:'CLP02 — Claim Status Code',rule:'Claim loop: CLP02'},
+  {id:'CLP03',label:'CLP03 — Total Claim Charge Amount',rule:'Claim loop: CLP03'},
+  {id:'CLP04',label:'CLP04 — Claim Payment Amount',rule:'Claim loop: CLP04'},
+  {id:'CLP05',label:'CLP05 — Patient Responsibility Amount',rule:'Claim loop: CLP05'},
+  {id:'CLP07',label:'CLP07 — Payer Claim Control Number / Reference',rule:'Claim loop: CLP07'},
+  {id:'CLP08',label:'CLP08 — Facility Type Code',rule:'Claim loop: CLP08'},
+  {id:'CLP09',label:'CLP09 — Claim Frequency Code',rule:'Claim loop: CLP09'},
+  {id:'NM1[QC].NM103',label:'NM1*QC → NM103 — Patient Last Name',rule:'Find NM1 where NM101 = QC; take NM103'},
+  {id:'NM1[QC].NM104',label:'NM1*QC → NM104 — Patient First Name',rule:'Find NM1 where NM101 = QC; take NM104'},
+  {id:'NM1[QC].NM105',label:'NM1*QC → NM105 — Patient Middle Name',rule:'Find NM1 where NM101 = QC; take NM105'},
+  {id:'NM1[IL,MI].NM109',label:'NM1*IL / NM108=MI → NM109 — Subscriber Member ID',rule:'Find NM1 where NM101 = IL and NM108 = MI; take NM109'},
+  {id:'REF[1L].REF02',label:'REF*1L → REF02 — Group Number',rule:'Find claim-level REF where REF01 = 1L; take REF02'},
+  {id:'DTM[036].DTM02',label:'DTM*036 → DTM02 — Date of Birth',rule:'Find claim-level DTM where DTM01 = 036; take DTM02'},
+  {id:'DTM[050].DTM02',label:'DTM*050 → DTM02 — Claim Received Date',rule:'Find claim-level DTM where DTM01 = 050; take DTM02'},
+  {id:'SVC01',label:'SVC01 — Composite Procedure / Revenue Code',rule:'Current service line: SVC01 composite'},
+  {id:'SVC02',label:'SVC02 — Service Charge Amount',rule:'Current service line: SVC02'},
+  {id:'SVC03',label:'SVC03 — Service Paid Amount',rule:'Current service line: SVC03'},
+  {id:'SVC05',label:'SVC05 — Paid Service Unit Count',rule:'Current service line: SVC05'},
+  {id:'DTM[472].DTM02',label:'DTM*472 → DTM02 — Service Date',rule:'Within current service line: DTM01 = 472; take DTM02'},
+  {id:'CAS.group',label:'CAS01 — Adjustment Group Code',rule:'Current service adjustment: CAS01'},
+  {id:'CAS.reason',label:'CAS02/05/08/... — Adjustment Reason',rule:'Normalized repeating CAS reason from reason/amount/quantity triplets'},
+  {id:'CAS.amount',label:'CAS03/06/09/... — Adjustment Amount',rule:'Normalized repeating CAS amount from reason/amount/quantity triplets'}
+];
+const TOKENS=[
+  {value:'CLP03',label:'CLP03 — Claim Charge'},
+  {value:'CLP04',label:'CLP04 — Claim Paid Amount'},
+  {value:'CLP05',label:'CLP05 — Patient Responsibility'},
+  {value:'SVC02',label:'SVC02 — Service Charge'},
+  {value:'SVC03',label:'SVC03 — Service Paid Amount'},
+  {value:'SVC05',label:'SVC05 — Service Units'},
+  {value:'CO_ADJUSTMENTS',label:'CO Adjustments — CAS01=CO amounts'},
+  {value:'PR_ADJUSTMENTS',label:'PR Adjustments — CAS01=PR amounts'},
+  {value:'COVERED_AMOUNT',label:'Covered Amount — calculated'},
+  {value:'MAX(',label:'MAX( — minimum/maximum helper'},
+  {value:'MIN(',label:'MIN( — minimum/maximum helper'}
+];
+
+const F=[];
+function add(section,id,name,type,length,start,scope,mapType,map,desc,opts={}){F.push({section,id,name,type,length,start,end:start+length-1,scope,mapType,map,desc,technicalRule:opts.technicalRule||'',sourceExplanation:opts.sourceExplanation||'',upper:opts.upper??false,trim:opts.trim??true,truncate:opts.truncate??true,align:opts.align||'left',pad:opts.pad??' ',fallbackType:opts.fallbackType||'Blank',fallbackValue:opts.fallbackValue||'',sampleIn:opts.sampleIn||'',sampleOut:opts.sampleOut||'',specNote:opts.specNote||'',baseline:null});}
+// Claim/header fields — current converter defaults.
+add('Claim Header','MIR000','MPL Record Type','A',2,1,'Claim','Hardcoded Text','MO','Outgoing MIR record type. Current converter writes MO.',{sampleOut:'MO'});
+add('Claim Header','MIR100','Claim ICN / Claim Number','A',17,3,'Claim','Direct from 835','CLP01','Claim identifier carried in the fixed MIR claim header.',{upper:true,sampleIn:'CLP*86520262090402400*4*350*0**ZZ*QYP144*11*1',sampleOut:'86520262090402400'});
+add('Claim Header','HEADER 20–25','Claim Cross Reference','A',6,20,'Claim','Direct from 835','CLP07','Cross-reference value currently mapped from CLP07 and truncated to six characters.',{upper:true,sampleIn:'CLP*...*ZZ*QYP144*11*1',sampleOut:'QYP144'});
+add('Claim Header','MIR200','TPA / Process Date 1','D',8,37,'Claim','System / Runtime','PROCESS_DATE','First 8-character process-date field. Current converter uses runtime processing date.',{sampleOut:'20260814'});
+add('Claim Header','MIR201','TPA / Process Date 2','D',8,45,'Claim','System / Runtime','PROCESS_DATE','Second 8-character process-date field. Same processing date as MIR200, producing YYYYMMDDYYYYMMDD across the pair.',{sampleOut:'20260814'});
+add('Claim Header','MIR202','Claim Disposition','A',1,53,'Claim','Direct from 835','CLP02','Claim disposition/status from CLP02.',{upper:true,sampleIn:'CLP*86520262090402400*4*350*0...',sampleOut:'4'});
+add('Claim Header','MIR203/204','Primary Claim Reason','A',5,55,'Claim','Formula','First applicable CAS Group + Reason','Gets the claim reason from the CAS adjustment information.',{technicalRule:'CLAIM_PRIMARY_REASON(CLP02, SVC[*].CAS[*])',sourceExplanation:'CAS01 = adjustment group (for example PR or CO). Reason comes from the repeating CAS reason elements: CAS02, CAS05, CAS08, CAS11, CAS14, CAS17. The current rule chooses the first applicable adjustment reason.',upper:true,sampleIn:'CLP02=4; first service CAS*PR*227*280',sampleOut:'PR227'});
+add('Subscriber','MIR301','Subscriber / Member ID','A',12,60,'Claim','Direct from 835','NM1[IL,MI].NM109','Subscriber identifier. Current converter prefers NM1*IL with NM108=MI and takes NM109.',{upper:true,sampleIn:'NM1*IL*1*RIEGNER*CORBIN*C***MI*J5YBD0000042',sampleOut:'J5YBD000004'});
+add('Subscriber','MIR302','Group Number','A',8,77,'Claim','Direct from 835','REF[1L].REF02','Subscriber group number.',{upper:true,fallbackType:'Hardcoded',fallbackValue:'99999999',sampleIn:'REF*1L*10670170',sampleOut:'10670170'});
+add('Patient','MIR401','Patient Last Name','A',20,86,'Claim','Direct from 835','NM1[QC].NM103','Patient surname from the QC entity name segment.',{upper:true,sampleIn:'NM1*QC*1*RIEGNER*JENNA*L',sampleOut:'RIEGNER'});
+add('Patient','MIR402','Patient First Name','A',10,106,'Claim','Direct from 835','NM1[QC].NM104','Patient first name from the QC entity name segment.',{upper:true,sampleIn:'NM1*QC*1*RIEGNER*JENNA*L',sampleOut:'JENNA'});
+add('Patient','MIR403','Patient Middle Initial','A',1,116,'Claim','Direct from 835','NM1[QC].NM105','Patient middle name/initial; current converter truncates to one character.',{upper:true,sampleIn:'NM1*QC*1*RIEGNER*JENNA*L',sampleOut:'L'});
+add('Patient','MIR404','Patient Sex','A',1,117,'Claim','Blank','','Patient sex is not currently populated by the 835 parser; field remains blank.',{sampleOut:''});
+add('Patient','MIR405','Patient Date of Birth','D',8,118,'Claim','Direct from 835','DTM[036].DTM02','Patient date of birth in CCYYMMDD.',{sampleIn:'DTM*036*19900712',sampleOut:'19900712'});
+// Current header numeric/default areas.
+[131,142,153,164,175,186,197].forEach((s,i)=>add('Claim Amount / Default Areas',`MIR500-series ${i+1}`,`Claim Numeric Field ${i+1}`,'N',11,s,'Claim','Hardcoded Text','0000000000+','Current converter preserves this MIR numeric area using the signed-zero default.',{align:'right',sampleOut:'0000000000+'}));
+add('Claim Amount / Default Areas','MIR500-series 8','Claim Numeric Field 8','N',11,233,'Claim','Hardcoded Text','0000000000+','Current converter preserves this MIR numeric area using the signed-zero default.',{align:'right',sampleOut:'0000000000+'});
+add('Record Control','MIR912','Record Sequence Number','N',2,249,'Physical record','System / Runtime','RECORD_SEQUENCE','Physical MIR record sequence for claims split across more than 50 service lines.',{align:'right',sampleOut:'01'});
+add('Record Control','MIR913','Maximum Record Number','N',2,251,'Physical record','System / Runtime','MAX_RECORD_SEQUENCE','Highest sequence number for this claim; repeated on every physical record.',{align:'right',sampleOut:'01'});
+add('Record Control','HEADER 333–334','Number of Service Lines','N',2,333,'Physical record','System / Runtime','SERVICE_COUNT','Number of service blocks written in this physical MIR record.',{align:'right',sampleOut:'01'});
+// Service block relative fields.
+add('Service Line','MIR1004','Line Disposition','A',1,16,'Service','Formula','Claim Status (CLP02) + Paid Amount (SVC03) + CAS adjustments','Uses the same line-status logic as the current converter.',{technicalRule:'SERVICE_STATUS(CLP02, SVC03, CAS[*])',sourceExplanation:'CLP02 = claim status. SVC03 = paid amount for the service line. CAS = adjustment information for the service line. These values are used together to determine the MIR line disposition.',upper:true,sampleIn:'CLP02=1; SVC03=0; CAS*PR*227*280',sampleOut:'4'});
+add('Service Line','MIR1005/1006','Line Primary Reason','A',5,18,'Service','Formula','Applicable CAS Group + Reason for this service line','Gets the service-line reason from the CAS adjustment information.',{technicalRule:'SERVICE_REASON(CLP02, SVC03, CAS[*], CLAIM_PRIMARY_REASON)',sourceExplanation:'CAS01 = adjustment group. Reason comes from CAS02/CAS05/CAS08/CAS11/CAS14/CAS17. CLP02 and SVC03 are also considered by the current line-reason logic.',upper:true,sampleIn:'CAS*PR*227*280',sampleOut:'PR227'});
+add('Service Line','Service Units','Number of Services','N',6,23,'Service','Direct from 835','SVC05','SVC05 converted to a 5-digit signed count with trailing sign.',{align:'right',sampleIn:'SVC*HC:99214*275*109.3**1',sampleOut:'00001+'});
+add('Service Line','Approved Units','Approved Units','N',6,29,'Service','Hardcoded Text','00000+','Current converter uses MIR signed-zero count default.',{align:'right',sampleOut:'00000+'});
+add('Service Line','Service Small Count','Small Count / Default','N',5,35,'Service','Hardcoded Text','0000+','Current converter uses MIR signed-zero count default.',{align:'right',sampleOut:'0000+'});
+add('Service Line','Line Numeric 1','Line Numeric Field 1','N',11,40,'Service','Hardcoded Text','0000000000+','Current converter signed-zero default.',{align:'right',sampleOut:'0000000000+'});
+add('Service Line','Service Charge','Submitted Service Charge','N',11,51,'Service','Direct from 835','SVC02','SVC02 formatted as implied 2-decimal amount with trailing sign.',{align:'right',sampleIn:'SVC*HC:99214*275*109.3**1',sampleOut:'0000027500+'});
+add('Service Line','Line Numeric 2','Line Numeric Field 2','N',11,62,'Service','Hardcoded Text','0000000000+','Current converter signed-zero default.',{align:'right',sampleOut:'0000000000+'});
+add('Service Line','Line Numeric 3','Line Numeric Field 3','N',11,73,'Service','Hardcoded Text','0000000000+','Current converter signed-zero default.',{align:'right',sampleOut:'0000000000+'});
+add('Service Line','Prepriced / Covered','Covered / Pre-Priced Amount','N',11,84,'Service','Formula','Service Charge (SVC02) - CO Adjustment Amounts (CAS)','Subtracts contractual (CO) adjustments from the service charge. The result cannot go below zero.',{technicalRule:'COVERED_CHARGE(SVC02, CAS[*])',sourceExplanation:'Service Charge comes from SVC02. CO adjustments come from CAS segments where CAS01 = CO. Their amounts are in the repeating CAS amount elements: CAS03, CAS06, CAS09, CAS12, CAS15, CAS18. Formula: SVC02 minus the sum of those CO amounts; minimum result is 0.',align:'right',sampleIn:'SVC02=275.00; CAS*CO*45*135.70',sampleOut:'0000013930+'});
+add('Service Line','MIR1018','TPA Approved-to-Pay Amount','N',11,95,'Service','Direct from 835','SVC03','Current converter maps SVC03 paid amount and formats with implied 2 decimals + trailing sign.',{align:'right',sampleIn:'SVC*HC:99214*275*109.3**1',sampleOut:'0000010930+'});
+add('Service Line','MIR1019','Patient Liability','N',11,106,'Service','Formula','Covered Amount (calculated) - Paid Amount (SVC03)','Subtracts the service paid amount from the covered amount. If the result is negative, use zero.',{technicalRule:'PATIENT_LIABILITY(COVERED_CHARGE(SVC02,CAS[*]), SVC03)',sourceExplanation:'Covered Amount is calculated from SVC02 minus CO adjustment amounts from CAS. Paid Amount comes directly from SVC03. Formula: Covered Amount minus SVC03; minimum result is 0.',align:'right',sampleIn:'covered=139.30; SVC03=109.30',sampleOut:'0000003000+'});
+add('Service Line','Service Small Numeric 2','Small Numeric / Default','N',5,117,'Service','Hardcoded Text','0000+','Current converter signed-zero small-number default.',{align:'right',sampleOut:'0000+'});
+add('Service Line','Line Numeric 4','Line Numeric Field 4','N',11,122,'Service','Hardcoded Text','0000000000+','Current converter signed-zero default.',{align:'right',sampleOut:'0000000000+'});
+add('Service Line','Line Numeric 5','Line Numeric Field 5','N',11,133,'Service','Hardcoded Text','0000000000+','Current converter signed-zero default.',{align:'right',sampleOut:'0000000000+'});
+for(let slot=1;slot<=10;slot++){
+  const rs=144+(slot-1)*16, as=149+(slot-1)*16;
+  add('Payment Reductions',`MIR1100–1130 · R${slot}`,`Payment Reduction ${slot} Reason`,'A',5,rs,'Service','Formula',`PR reason from CAS - Slot ${slot}`,'Finds the patient-responsibility reason from CAS for this payment-reduction slot.',{technicalRule:`PR_REDUCTION_REASON(slot=${slot}, CAS[*], reason_range=1..10)`,sourceExplanation:'Use CAS adjustments where CAS01 = PR. The reason is read from the repeating CAS reason elements: CAS02, CAS05, CAS08, CAS11, CAS14, CAS17. The matching reason is placed into this MIR reduction slot.',upper:true,sampleIn:slot===3?'CAS*PR*3*10':'CAS adjustments',sampleOut:slot===3?'PR3':''});
+  add('Payment Reductions',`MIR1100–1130 · A${slot}`,`Payment Reduction ${slot} Amount`,'N',11,as,'Service','Formula',`PR amount from CAS - Slot ${slot}`,'Uses the matching patient-responsibility amount from CAS. If none exists, the amount is zero.',{technicalRule:`PR_REDUCTION_AMOUNT(slot=${slot}, CAS[*], reason_range=1..10)`,sourceExplanation:'Use CAS adjustments where CAS01 = PR. The amount paired with the reason is read from CAS03, CAS06, CAS09, CAS12, CAS15, CAS18. The matching amount is placed into this MIR reduction slot; if none is available the current mapper writes zero.',align:'right',sampleIn:slot===3?'CAS*PR*3*10':'CAS adjustments',sampleOut:slot===3?'0000001000+':'0000000000+'});
+}
+F.forEach(x=>x.baseline=JSON.parse(JSON.stringify(x)));
+
+let selected=-1;
+const $=id=>document.getElementById(id);
+
+function cls(t){
+  return t==='Direct from 835'?'direct':t==='Formula'?'formula':t==='Hardcoded Text'?'constant':t==='System / Runtime'?'system':'blank';
+}
+function mapSummary(f){
+  if(f.mapType==='Direct from 835') return f.map + (f.fallbackType==='Hardcoded' ? ` · fallback ${f.fallbackValue}` : '');
+  if(f.mapType==='Formula') return f.map;
+  if(f.mapType==='Hardcoded Text') return `"${f.map}"`;
+  if(f.mapType==='System / Runtime') return f.map;
+  return 'blank';
+}
+function sameAsBaseline(f){
+  const b=f.baseline;
+  return ['mapType','map','length','start','upper','trim','truncate','align','pad','fallbackType','fallbackValue']
+    .every(k=>String(f[k])===String(b[k]));
+}
+function refreshStatus(){
+  const changed=F.filter(f=>!sameAsBaseline(f)).length;
+  $('totalPill').textContent=`${F.length} MIR fields configured`;
+  $('changedPill').textContent=`${changed} changed`;
+  $('changedPill').className='pill '+(changed?'warn':'');
+  $('baselinePill').textContent=changed?'Draft differs from current converter':'✓ Same as current converter';
+  $('baselinePill').className='pill '+(changed?'warn':'ok');
+}
+function populateFilters(){
+  const sections=[...new Set(F.map(f=>f.section))];
+  $('sectionFilter').innerHTML='<option value="">All MIR sections</option>'+sections.map(s=>`<option>${s}</option>`).join('');
+  $('tokenSelect').innerHTML=TOKENS.map(t=>`<option value="${t.value}">${t.label}</option>`).join('');
+}
+function renderRows(){
+  const q=$('search').value.trim().toLowerCase(), sec=$('sectionFilter').value, typ=$('typeFilter').value;
+  let out='';
+  F.forEach((f,i)=>{
+    if(q && !(f.id+' '+f.name+' '+f.desc+' '+mapSummary(f)).toLowerCase().includes(q)) return;
+    if(sec && f.section!==sec) return;
+    if(typ && f.mapType!==typ) return;
+    out+=`<tr data-i="${i}">
+      <td><span class="fieldid">${f.id}</span>${sameAsBaseline(f)?'':'<span class="changed">changed</span>'}</td>
+      <td><span class="name" title="${escapeAttr(f.desc)}">${f.name}</span><span class="descdot" title="${escapeAttr(f.desc)}">ⓘ</span><div class="meta">${f.section}</div></td>
+      <td><span class="mono">${f.type} · ${f.length}</span></td>
+      <td><span class="mono">${f.start}–${f.end}</span></td>
+      <td><span class="maptype ${cls(f.mapType)}">${f.mapType}</span></td>
+      <td><div class="source" title="${escapeAttr(mapSummary(f))}">${mapSummary(f)}</div></td>
+      <td><button class="btn edit" data-i="${i}">Edit</button></td>
+    </tr>`;
+  });
+  $('rows').innerHTML=out||'<tr><td colspan="7"><div class="empty">No MIR fields match this filter.</div></td></tr>';
+}
+function escapeAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function sourceOptions(value){
+  $('sourceSelect').innerHTML=SOURCES.map(s=>`<option value="${s.id}" ${s.id===value?'selected':''}>${s.label}</option>`).join('');
+}
+function updateEditorVisibility(){
+  const t=$('mapType').value;
+  $('directBox').style.display=t==='Direct from 835'?'block':'none';
+  $('formulaBox').style.display=t==='Formula'?'block':'none';
+  $('constantBox').style.display=t==='Hardcoded Text'?'block':'none';
+  $('systemBox').style.display=t==='System / Runtime'?'block':'none';
+  $('blankBox').style.display=t==='Blank'?'block':'none';
+}
+function currentDate(){
+  const d=new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+function previewValue(f){
+  let v=f.sampleOut||'';
+  if(f.mapType==='Hardcoded Text') v=f.map;
+  if(f.mapType==='Blank') v='';
+  if(f.mapType==='System / Runtime'){
+    if(f.map==='PROCESS_DATE') v=currentDate(); else v='01';
+  }
+  if(!v && f.fallbackType==='Hardcoded') v=f.fallbackValue;
+  if(f.trim) v=String(v).trim();
+  if(f.upper) v=String(v).toUpperCase();
+  if(f.truncate) v=v.slice(0,f.length);
+  return f.align==='right'?v.padStart(f.length,f.pad||' '):v.padEnd(f.length,f.pad||' ');
+}
+function renderPreview(){
+  const f=F[selected];
+  if(!f) return;
+  let src=f.sampleIn;
+  if(!src){
+    if(f.mapType==='Formula') src='Formula: '+(f.technicalRule||f.map);
+    else if(f.mapType==='Hardcoded Text') src='Fixed value: '+f.map;
+    else if(f.mapType==='System / Runtime') src='System: '+f.map;
+    else if(f.mapType==='Direct from 835') src=(SOURCES.find(s=>s.id===f.map)||{rule:f.map}).rule;
+    else src='No source';
+  }
+  $('sampleInput').textContent=src;
+  $('sampleOutput').textContent='|'+previewValue(f)+'|';
+  $('previewHelp').textContent=`Output field is exactly ${f.length} characters · MIR position ${f.start}–${f.end}`;
+}
+function renderDrawer(){
+  const f=F[selected];
+  $('dId').textContent=f.id; $('dName').textContent=f.name; $('dSection').textContent=f.section;
+  $('dType').textContent=f.type; $('dLength').textContent=f.length+' chars'; $('dPosition').textContent=f.start+'–'+f.end; $('dDesc').textContent=f.desc;
+  $('mapType').value=f.mapType;
+  sourceOptions(f.map);
+  $('formulaValue').value=f.mapType==='Formula'?(f.technicalRule||''):'';
+  $('constantValue').value=f.mapType==='Hardcoded Text'?f.map:'';
+  $('systemValue').value=f.mapType==='System / Runtime'?f.map:'PROCESS_DATE';
+  $('fallbackType').value=f.fallbackType;
+  $('fallbackValue').value=f.fallbackValue;
+  $('fallbackValue').disabled=f.fallbackType!=='Hardcoded';
+  $('startValue').value=f.start; $('lengthValue').value=f.length; $('alignValue').value=f.align; $('padValue').value=f.pad;
+  $('upperValue').checked=f.upper; $('trimValue').checked=f.trim; $('truncateValue').checked=f.truncate;
+  $('technicalRuleBox').style.display=f.mapType==='Formula' && f.technicalRule?'block':'none'; $('technicalRuleValue').textContent=f.technicalRule||'';
+  $('formulaSourceHelp').textContent=f.mapType==='Formula' ? (f.sourceExplanation||'The exact 835 source for this formula has not been documented yet.') : '';
+  const src=SOURCES.find(s=>s.id===f.map); $('sourceHelp').textContent=src?src.rule:'Choose the exact 835 segment/element.';
+  updateEditorVisibility(); renderPreview();
+}
+function openDrawer(i){
+  selected=+i; renderDrawer(); $('scrim').classList.add('on'); $('drawer').classList.add('on'); $('drawer').setAttribute('aria-hidden','false');
+}
+function closeDrawer(){
+  $('scrim').classList.remove('on'); $('drawer').classList.remove('on'); $('drawer').setAttribute('aria-hidden','true');
+  renderRows(); refreshStatus();
+}
+function mutate(k,v){
+  const f=F[selected]; f[k]=v;
+  if(k==='start'||k==='length') f.end=Number(f.start)+Number(f.length)-1;
+  renderDrawer(); renderRows(); refreshStatus();
+}
+function toast(msg){
+  $('toast').textContent=msg; $('toast').classList.add('on'); setTimeout(()=>$('toast').classList.remove('on'),1600);
+}
+
+$('rows').addEventListener('click',e=>{const b=e.target.closest('.edit'); const tr=e.target.closest('tr[data-i]'); if(b||tr)openDrawer((b||tr).dataset.i)});
+['search','sectionFilter','typeFilter'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',renderRows));
+$('closeBtn').onclick=$('doneBtn').onclick=$('scrim').onclick=closeDrawer;
+
+$('mapType').addEventListener('change',e=>{
+  const f=F[selected],t=e.target.value; f.mapType=t;
+  if(t==='Direct from 835') f.map=SOURCES[0].id;
+  else if(t==='Formula'){ f.map='Custom formula'; f.technicalRule=''; }
+  else if(t==='Hardcoded Text') f.map='';
+  else if(t==='System / Runtime') f.map='PROCESS_DATE';
+  else f.map='';
+  renderDrawer(); renderRows(); refreshStatus();
+});
+$('sourceSelect').addEventListener('change',e=>mutate('map',e.target.value));
+$('formulaValue').addEventListener('input',e=>{F[selected].technicalRule=e.target.value; if(F[selected].map==='')F[selected].map='Custom formula'; renderPreview();refreshStatus();renderRows()});
+$('constantValue').addEventListener('input',e=>{F[selected].map=e.target.value;renderPreview();refreshStatus();renderRows()});
+$('systemValue').addEventListener('change',e=>mutate('map',e.target.value));
+$('fallbackType').addEventListener('change',e=>{F[selected].fallbackType=e.target.value;if(e.target.value!=='Hardcoded')F[selected].fallbackValue='';renderDrawer();refreshStatus();renderRows()});
+$('fallbackValue').addEventListener('input',e=>{F[selected].fallbackValue=e.target.value;renderPreview();refreshStatus();renderRows()});
+$('startValue').addEventListener('input',e=>mutate('start',+e.target.value));
+$('lengthValue').addEventListener('input',e=>mutate('length',+e.target.value));
+$('alignValue').addEventListener('change',e=>mutate('align',e.target.value));
+$('padValue').addEventListener('input',e=>mutate('pad',e.target.value||' '));
+$('upperValue').addEventListener('change',e=>mutate('upper',e.target.checked));
+$('trimValue').addEventListener('change',e=>mutate('trim',e.target.checked));
+$('truncateValue').addEventListener('change',e=>mutate('truncate',e.target.checked));
+$('insertTokenBtn').onclick=()=>{
+  const ta=$('formulaValue'),tok=$('tokenSelect').value,pos=ta.selectionStart??ta.value.length;
+  ta.value=ta.value.slice(0,pos)+tok+ta.value.slice(pos);F[selected].technicalRule=ta.value;if(!F[selected].map)F[selected].map='Custom formula';ta.focus();renderPreview();refreshStatus();renderRows();
+};
+$('resetFieldBtn').onclick=()=>{
+  const b=F[selected].baseline; Object.keys(b).forEach(k=>{if(k!=='baseline')F[selected][k]=JSON.parse(JSON.stringify(b[k]))});
+  F[selected].baseline=b; renderDrawer();renderRows();refreshStatus();toast('Field reset to baseline');
+};
+function payloadFields(){
+  return F.map(f=>({
+    id:f.id, section:f.section, scope:f.scope, mapType:f.mapType, map:f.map,
+    length:Number(f.length), start:Number(f.start), upper:!!f.upper, trim:!!f.trim,
+    truncate:!!f.truncate, align:f.align, pad:f.pad,
+    fallbackType:f.fallbackType, fallbackValue:f.fallbackValue, technicalRule:f.technicalRule
+  }));
+}
+function applyServerFields(fields){
+  const byId=new Map(fields.map(x=>[x.id,x]));
+  F.forEach(f=>{
+    const x=byId.get(f.id); if(!x)return;
+    ['mapType','map','length','start','upper','trim','truncate','align','pad','fallbackType','fallbackValue','technicalRule','sourceExplanation'].forEach(k=>{
+      if(x[k]!==undefined)f[k]=x[k];
+    });
+    f.end=Number(f.start)+Number(f.length)-1;
+  });
+  renderRows();refreshStatus();
+  if(selected>=0)renderDrawer();
+}
+async function loadServerMappings(){
+  try{
+    const res=await fetch('/api/mappings');
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.detail||'Unable to load mappings');
+    applyServerFields(data.fields||[]);
+  }catch(err){
+    toast('Using built-in baseline mappings');
+  }
+}
+$('resetAllBtn').onclick=async()=>{
+  if(!confirm('Reset every mapping to the current converter baseline?'))return;
+  const res=await fetch('/api/mappings/reset',{method:'POST'});
+  const data=await res.json();
+  if(!res.ok){alert(data.detail||'Reset failed');return;}
+  applyServerFields(data.fields||[]);
+  toast('Reset to baseline');
+};
+$('checkBtn').onclick=async()=>{
+  const res=await fetch('/api/mappings/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:payloadFields()})});
+  const data=await res.json();
+  if(!res.ok){alert(data.detail||'Mapping check failed');return;}
+  if(data.issues&&data.issues.length) alert('Please review:\n\n'+data.issues.join('\n'));
+  else alert('Mapping check passed.\n\nThese mappings can be used by the 835 → MIR converter.');
+};
+$('saveBtn').onclick=async()=>{
+  const btn=$('saveBtn'); btn.disabled=true; btn.textContent='Saving…';
+  try{
+    const res=await fetch('/api/mappings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:payloadFields()})});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.detail||'Save failed');
+    applyServerFields(data.fields||[]);
+    toast('Saved — converter will use these mappings');
+  }catch(err){
+    alert('Could not save mappings:\n\n'+err.message);
+  }finally{btn.disabled=false;btn.textContent='Save & use';}
+};
+
+populateFilters();renderRows();refreshStatus();loadServerMappings();
+</script>
+</body>
+</html>

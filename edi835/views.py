@@ -6,8 +6,8 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Sum
 
-from .models import EDI835File, SFTPConfig
-from .services import process_edi835_file_content, get_edi835_storage_dirs, sync_folder_observer
+from .models import SFTPConfig, EDI835File
+from .services import process_edi835_file_content, get_edi835_storage_dirs, sync_folder_observer, process_multiple_edi835_files
 
 
 @csrf_exempt
@@ -131,7 +131,7 @@ def tracked_files_list(request):
             "processed": (r.status == "ARCHIVED"),
             "present_in_sftp": in_sftp,
             "present_in_archive_folder": in_archive,
-            "ingestion_source": getattr(r, "ingestion_source", "MANUAL") or "MANUAL",
+            "ingestion_source": r.ingestion_source or "MANUAL",
         })
     return JsonResponse({"files": data})
 
@@ -1144,7 +1144,7 @@ def api_start_batch_conversion(request):
     from pathlib import Path
     from django.conf import settings
     from .models import SFTPConfig, EDI835File
-    from .services import get_edi835_storage_dirs, process_edi835_file_content, upload_mir_to_sftp
+    from .services import get_edi835_storage_dirs, process_edi835_file_content, upload_mir_to_sftp, process_multiple_edi835_files
     from converter.services.validator import EDI835Validator
 
     logger = logging.getLogger(__name__)
@@ -1203,13 +1203,16 @@ def api_start_batch_conversion(request):
 
             remote_items = sftp.listdir_attr(remote_in_dir)
             files_to_process = []
+            ALLOWED_EXTENSIONS = [".x12", ".835", ".edi", ".txt", ".dat"]
 
             for attr in remote_items:
                 if not stat.S_ISDIR(attr.st_mode):
                     fname = attr.filename
-                    if not fname.startswith("."):
+                    ext = os.path.splitext(fname)[1].lower()
+                    if not fname.startswith(".") and ext in ALLOWED_EXTENSIONS:
                         files_to_process.append(fname)
 
+            sftp_batch_items = []
             for fname in files_to_process:
                 remote_file_path = posixpath.join(remote_in_dir, fname)
                 try:
@@ -1220,67 +1223,12 @@ def api_start_batch_conversion(request):
                         raw_bytes = raw_bytes[3:]
 
                     edi_content = raw_bytes.decode("utf-8", errors="replace").lstrip("\ufeff").strip()
-
-                    # Save to local archive directory
-                    archive_path_file = archive_dir / fname
-                    with open(archive_path_file, "w", encoding="utf-8") as af:
-                        af.write(edi_content)
-
-                    rel_archive_path = (Path("media") / "edi835" / "archive" / fname).as_posix()
-                    rel_input_path = (Path("media") / "edi835" / "input" / fname).as_posix()
-
-                    # Validate 835 EDI content
-                    validator = EDI835Validator()
-                    report = validator.validate(edi_content)
-                    is_valid = report.get("valid", report.get("is_valid", True))
-                    claims_cnt = report.get("claims", report.get("claims_found", 0))
-
-                    db_rec = EDI835File.objects.filter(original_filename=fname).first()
-                    if not db_rec:
-                        db_rec = EDI835File.objects.create(
-                            original_filename=fname,
-                            stored_filename=fname,
-                            status="PROCESSING" if is_valid else "ERROR",
-                            archive_path=rel_archive_path,
-                            input_path=rel_input_path,
-                            claims_count=claims_cnt,
-                            present_in_sftp=False,
-                            present_in_archive_folder=True,
-                            ingestion_source="SFTP",
-                        )
-                    else:
-                        db_rec.archive_path = rel_archive_path
-                        db_rec.status = "PROCESSING" if is_valid else "ERROR"
-                        db_rec.claims_count = claims_cnt
-                        db_rec.present_in_archive_folder = True
-                        db_rec.ingestion_source = "SFTP"
-                        db_rec.save()
-
-                    if is_valid:
-                        # Convert 835 to MIR
-                        process_edi835_file_content(edi_content, original_filename=fname, file_id=str(db_rec.id))
-                        
-                        db_rec.refresh_from_db()
-                        uploaded_sftp = False
-                        # Upload generated MIR to outbound SFTP folder
-                        if db_rec.output_path:
-                            abs_mir_path = Path(settings.BASE_DIR) / db_rec.output_path
-                            base_name = fname.replace(".835", "").replace(".x12", "").replace(".edi", "")
-                            mir_filename = f"MIR_{base_name}.mir"
-                            uploaded_sftp = upload_mir_to_sftp(str(abs_mir_path), mir_filename)
-
-                        # Delete original 835 file from remote SFTP inbound folder
-                        try:
-                            sftp.remove(remote_file_path)
-                        except Exception as del_err:
-                            logger.warning(f"Could not remove remote SFTP file {remote_file_path}: {del_err}")
-
-                        db_rec.status = "ARCHIVED"
-                        db_rec.present_in_sftp = uploaded_sftp
-                        db_rec.save(update_fields=["status", "present_in_sftp"])
-                        processed_files.append(fname)
-                    else:
-                        errors.append(f"{fname}: Validation failed")
+                    if edi_content and "CLP" in edi_content:
+                        sftp_batch_items.append({
+                            "filename": fname,
+                            "content": edi_content,
+                            "remote_path": remote_file_path,
+                        })
                 except Exception as file_err:
                     errors.append(f"{fname}: {str(file_err)}")
 
@@ -1295,10 +1243,16 @@ def api_start_batch_conversion(request):
                 except Exception: pass
 
     # 2. Also process any local files dropped into media/edi835/input/ directory
+    local_batch_items = []
+    ALLOWED_EXTENSIONS = [".x12", ".835", ".edi", ".txt", ".dat"]
     if os.path.exists(input_dir):
+        sftp_filenames = {item["filename"] for item in sftp_batch_items}
         for fname in os.listdir(input_dir):
+            if fname in sftp_filenames:
+                continue
             local_file_path = input_dir / fname
-            if os.path.isfile(local_file_path) and not fname.startswith(".") and fname not in processed_files:
+            ext = os.path.splitext(fname)[1].lower()
+            if os.path.isfile(local_file_path) and not fname.startswith(".") and ext in ALLOWED_EXTENSIONS:
                 try:
                     with open(local_file_path, "rb") as lf:
                         raw_bytes = lf.read()
@@ -1307,52 +1261,65 @@ def api_start_batch_conversion(request):
                         raw_bytes = raw_bytes[3:]
 
                     edi_content = raw_bytes.decode("utf-8", errors="replace").lstrip("\ufeff").strip()
-
-                    archive_path_file = archive_dir / fname
-                    with open(archive_path_file, "w", encoding="utf-8") as af:
-                        af.write(edi_content)
-
-                    rel_archive_path = (Path("media") / "edi835" / "archive" / fname).as_posix()
-                    validator = EDI835Validator()
-                    report = validator.validate(edi_content)
-                    is_valid = report.get("valid", report.get("is_valid", True))
-                    claims_cnt = report.get("claims", report.get("claims_found", 0))
-
-                    db_rec = EDI835File.objects.filter(original_filename=fname).first()
-                    if not db_rec:
-                        db_rec = EDI835File.objects.create(
-                            original_filename=fname,
-                            stored_filename=fname,
-                            status="PROCESSING" if is_valid else "ERROR",
-                            archive_path=rel_archive_path,
-                            claims_count=claims_cnt,
-                            present_in_archive_folder=True,
-                        )
-
-                    if is_valid:
-                        process_edi835_file_content(edi_content, original_filename=fname, file_id=str(db_rec.id))
-                        db_rec.refresh_from_db()
-                        uploaded_sftp = False
-                        if db_rec.output_path:
-                            abs_mir_path = Path(settings.BASE_DIR) / db_rec.output_path
-                            base_name = fname.replace(".835", "").replace(".x12", "").replace(".edi", "")
-                            mir_filename = f"MIR_{base_name}.mir"
-                            uploaded_sftp = upload_mir_to_sftp(str(abs_mir_path), mir_filename)
-
-                        # Delete from local input directory
-                        try:
-                            os.remove(local_file_path)
-                        except Exception:
-                            pass
-
-                        db_rec.status = "ARCHIVED"
-                        db_rec.present_in_sftp = uploaded_sftp
-                        db_rec.save(update_fields=["status", "present_in_sftp"])
-                        processed_files.append(fname)
+                    if edi_content and "CLP" in edi_content:
+                        local_batch_items.append({
+                            "filename": fname,
+                            "content": edi_content,
+                            "local_path": local_file_path,
+                        })
                 except Exception as local_err:
                     errors.append(f"{fname} (local): {str(local_err)}")
 
-    msg = f"Processed {len(processed_files)} file(s) from inbound folder." if processed_files else "No new 835 files found in inbound folder."
+    # Combine all SFTP and local inbound items into ONE SINGLE batch conversion for a single MIR file
+    combined_items = sftp_batch_items + local_batch_items
+    if combined_items:
+        batch_res = process_multiple_edi835_files(combined_items)
+        if batch_res.get("success"):
+            processed_files.extend([item["filename"] for item in combined_items])
+            # Clean up SFTP remote files if SFTP client is available or reconnect if needed
+            if sftp_batch_items and config and config.host and config.username and config.inbound_835_folder:
+                try:
+                    ssh_del = paramiko.SSHClient()
+                    if config.trust_unknown_key:
+                        ssh_del.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    else:
+                        ssh_del.load_system_host_keys()
+                    pkey_del = None
+                    if config.auth_method in ["SSH Key", "SSH Key + Password"]:
+                        pkey_del, _ = parse_ssh_private_key(config.ssh_key, password=config.password)
+                    pass_del = config.password if config.auth_method in ["Password", "SSH Key + Password"] else None
+                    ssh_del.connect(
+                        hostname=config.host,
+                        port=config.port or 22,
+                        username=config.username,
+                        password=pass_del,
+                        pkey=pkey_del,
+                        timeout=8,
+                        banner_timeout=8,
+                        auth_timeout=8,
+                        look_for_keys=False,
+                        allow_agent=False,
+                    )
+                    sftp_del = ssh_del.open_sftp()
+                    for item in sftp_batch_items:
+                        try:
+                            sftp_del.remove(item["remote_path"])
+                        except Exception as del_err:
+                            logger.warning(f"Could not remove remote SFTP file {item['remote_path']}: {del_err}")
+                    sftp_del.close()
+                    ssh_del.close()
+                except Exception as del_conn_err:
+                    logger.warning(f"Cleanup error removing remote SFTP files: {del_conn_err}")
+
+            for item in local_batch_items:
+                try:
+                    os.remove(item["local_path"])
+                except Exception:
+                    pass
+        else:
+            errors.append(f"Batch conversion error: {batch_res.get('error')}")
+
+    msg = f"Processed {len(processed_files)} file(s) (.x12/.835/.edi) from inbound folder into single combined MIR." if processed_files else "No .x12, .835, or .edi files found in inbound folder."
 
     return JsonResponse({
         "success": True,
