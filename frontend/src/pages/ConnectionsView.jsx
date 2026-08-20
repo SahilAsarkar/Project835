@@ -651,7 +651,6 @@ export default function ConnectionsView({
                     type="text"
                     value={uniDir837}
                     onChange={(e) => setUniDir837(e.target.value)}
-                    placeholder="e.g. /inbound/837/"
                     style={{
                       flex: 1,
                       padding: "8px 10px",
@@ -713,7 +712,6 @@ export default function ConnectionsView({
                     type="text"
                     value={uniDir835}
                     onChange={(e) => setUniDir835(e.target.value)}
-                    placeholder="e.g. /inbound/835/"
                     style={{
                       flex: 1,
                       padding: "8px 10px",
@@ -775,7 +773,6 @@ export default function ConnectionsView({
                     type="text"
                     value={uniDirMir}
                     onChange={(e) => setUniDirMir(e.target.value)}
-                    placeholder="e.g. /outbound/mir/"
                     style={{
                       flex: 1,
                       padding: "8px 10px",
@@ -1017,7 +1014,6 @@ export default function ConnectionsView({
                       type="text"
                       value={inDir837}
                       onChange={(e) => setInDir837(e.target.value)}
-                      placeholder="e.g. /inbound/837/"
                       style={{
                         flex: 1,
                         padding: "7px 9px",
@@ -1079,7 +1075,6 @@ export default function ConnectionsView({
                       type="text"
                       value={inDir835}
                       onChange={(e) => setInDir835(e.target.value)}
-                      placeholder="e.g. /inbound/835/"
                       style={{
                         flex: 1,
                         padding: "7px 9px",
@@ -1329,7 +1324,6 @@ export default function ConnectionsView({
                       type="text"
                       value={outDirMir}
                       onChange={(e) => setOutDirMir(e.target.value)}
-                      placeholder="e.g. /outbound/mir/"
                       style={{
                         flex: 1,
                         padding: "7px 9px",

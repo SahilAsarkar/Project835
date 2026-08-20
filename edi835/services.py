@@ -224,7 +224,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
 
     try:
         # Step 3: Perform 835 parsing and MIR conversion during processing
-        res = parse_835_to_mir(edi_text)
+        res = parse_835_to_mir(edi_text, filename=stored_filename)
         mir_text = res["text"]
 
         # Step 4: Write converted MIR file to output/ folder
@@ -280,6 +280,103 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
             "db_record": db_record,
             "error": err_str,
         }
+
+
+def process_multiple_edi835_files(files_list):
+    """
+    Takes a list of file items: [ {"filename": "f1.835", "content": "..."}, {"filename": "f2.835", "content": "..."} ]
+    Parses claims from all 835 files, combines them into a SINGLE MIR output file,
+    creates a SINGLE DB record in the table with multiple input names and single output name,
+    saves the single MIR file to output/, archives individual 835 files, and uploads to SFTP outbound.
+    """
+    from .parser import parse_835, generate_mir_text
+    dirs = get_edi835_storage_dirs()
+
+    all_claims = []
+    file_names = []
+    errors = []
+
+    if not files_list:
+        return {"success": False, "error": "No files provided for batch conversion."}
+
+    first_archive_rel_path = None
+
+    for idx, item in enumerate(files_list):
+        fname = item.get("filename") or item.get("original_filename") or f"file_{idx+1}.835"
+        file_names.append(fname)
+
+        content = (item.get("content") or item.get("edi_text") or "").lstrip("\ufeff").strip()
+        if not content:
+            continue
+
+        # Save each input file to archive/
+        archive_path_file = dirs["archive"] / fname
+        with open(archive_path_file, "w", encoding="utf-8") as af:
+            af.write(content)
+        rel_archive_path = (Path("media") / "edi835" / "archive" / fname).as_posix()
+        if not first_archive_rel_path:
+            first_archive_rel_path = rel_archive_path
+
+        try:
+            claims = parse_835(content, filename=fname)
+            all_claims.extend(claims)
+        except Exception as e:
+            errors.append(f"{fname}: {str(e)}")
+
+    if not all_claims:
+        return {
+            "success": False,
+            "error": "No CLP claim segments could be parsed from any of the provided 835 files.",
+            "errors": errors
+        }
+
+    # Generate ONE single combined MIR file from all claims across all input 835 files
+    mir_res = generate_mir_text(all_claims, filename=file_names[0] if file_names else None)
+    mir_text = mir_res["text"]
+    mir_text = mir_res["text"]
+
+    first_base_name = os.path.splitext(file_names[0])[0] if file_names else "batch"
+    combined_base_name = f"MIR_COMBINED_{first_base_name}" if len(file_names) > 1 else f"MIR_{first_base_name}"
+    mir_filename = f"{combined_base_name}.mir"
+    output_mir_path = dirs["output"] / mir_filename
+
+    export_mir_file(mir_text, dirs["output"], mir_filename)
+    rel_output_path = (Path("media") / "edi835" / "output" / mir_filename).as_posix()
+
+    # Upload single combined MIR file directly to configured SFTP outbound folder
+    sftp_uploaded = upload_mir_to_sftp(output_mir_path, mir_filename)
+
+    # Combine all input file names into a single string for table 835 IN column
+    combined_inputs_str = ", ".join(file_names)
+
+    # Create or update a SINGLE DB record for this batch run
+    db_rec = EDI835File.objects.create(
+        id=uuid.uuid4(),
+        original_filename=combined_inputs_str,
+        stored_filename=file_names[0] if file_names else "batch.835",
+        status="ARCHIVED",
+        claims_count=mir_res["claims_count"],
+        services_count=mir_res["services_count"],
+        records_count=mir_res["records_count"],
+        output_path=rel_output_path,
+        archive_path=first_archive_rel_path,
+        present_in_sftp=sftp_uploaded,
+        present_in_archive_folder=True,
+        processing_completed_at=timezone.now()
+    )
+
+    return {
+        "success": True,
+        "mir_text": mir_text,
+        "combined_filename": mir_filename,
+        "files_count": len(file_names),
+        "claims_count": mir_res["claims_count"],
+        "services_count": mir_res["services_count"],
+        "records_count": mir_res["records_count"],
+        "sftp_uploaded": sftp_uploaded,
+        "db_record": db_rec,
+        "errors": errors,
+    }
 
 
 def sync_folder_observer():

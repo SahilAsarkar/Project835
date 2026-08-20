@@ -6,6 +6,7 @@ export default function ConversionsView({
   onOpenFileModal,
 }) {
   // Conversion Form State
+  const [selectedFilesList, setSelectedFilesList] = useState([]);
   const [ediText, setEdiText] = useState("");
   const [currentFileName, setCurrentFileName] = useState("uploaded_file.x12");
   const [file835Subtext, setFile835Subtext] = useState("No 835 files selected.");
@@ -37,18 +38,40 @@ export default function ConversionsView({
   const [sortKey, setSortKey] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
 
-  // 835 File Input change
-  const handle835FileChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
+  // 835 File Input change (Supports multiple file selection)
+  const handle835FileChange = async (e) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const files = Array.from(e.target.files);
+
+    if (files.length === 1) {
+      const file = files[0];
       setCurrentFileName(file.name);
       setFile835Subtext("Selected: " + file.name);
       const reader = new FileReader();
       reader.onload = (evt) => {
         setEdiText(evt.target.result);
+        setSelectedFilesList([{ filename: file.name, content: evt.target.result }]);
         resetConversionForm();
       };
       reader.readAsText(file);
+    } else {
+      setCurrentFileName(`Batch (${files.length} files)`);
+      setFile835Subtext(`Selected ${files.length} 835 files: ${files.map((f) => f.name).join(", ")}`);
+
+      const filePromises = files.map((file) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            resolve({ filename: file.name, content: evt.target.result });
+          };
+          reader.readAsText(file);
+        });
+      });
+
+      const loadedFiles = await Promise.all(filePromises);
+      setSelectedFilesList(loadedFiles);
+      setEdiText(loadedFiles.map((f) => f.content).join("\n"));
+      resetConversionForm();
     }
   };
 
@@ -72,27 +95,28 @@ export default function ConversionsView({
     setStep3State("");
   };
 
-  // Validate 835 Action
+  // Validate 835 Action (Single or Multi-file)
   const handleValidate = async () => {
-    const text = ediText.trim();
     setValidationError(null);
     setValidationReport(null);
     setMirOutputText("");
 
-    if (!text) {
-      setValidationError("Please select an 835 file to validate.");
+    if (selectedFilesList.length === 0 && !ediText.trim()) {
+      setValidationError("Please select 835 file(s) to validate.");
       return;
     }
 
     setValidating(true);
     try {
+      const payload =
+        selectedFilesList.length > 1
+          ? { files: selectedFilesList }
+          : { edi_text: ediText.trim(), original_filename: currentFileName };
+
       const res = await fetch("/api/validate/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          edi_text: text,
-          original_filename: currentFileName,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -127,23 +151,27 @@ export default function ConversionsView({
     }
   };
 
-  // Process MIR Action
+  // Process MIR Action (Converts single or multiple 835 files into a SINGLE combined MIR file)
   const handleProcessMIR = async () => {
-    const text = ediText.trim();
-    if (!text) return;
+    if (selectedFilesList.length === 0 && !ediText.trim()) return;
 
     setProcessing(true);
     setValidationError(null);
 
     try {
+      const payload =
+        selectedFilesList.length > 1
+          ? { files: selectedFilesList }
+          : {
+              edi_text: ediText.trim(),
+              original_filename: currentFileName,
+              file_id: activeValidatedFileId,
+            };
+
       const res = await fetch("/api/convert/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          edi_text: text,
-          original_filename: currentFileName,
-          file_id: activeValidatedFileId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -152,10 +180,12 @@ export default function ConversionsView({
       }
 
       setMirOutputText(data.text);
+      if (data.combined_filename) {
+        setCurrentFileName(data.combined_filename);
+      }
       setStep1State("done");
       setStep2State("done");
       setStep3State("done");
-      setActiveValidatedFileId(null);
 
       if (onRefreshData) onRefreshData();
     } catch (err) {
@@ -359,6 +389,7 @@ export default function ConversionsView({
             <input
               type="file"
               accept=".835,.853,.x12,.txt,.edi,*/*"
+              multiple
               onChange={handle835FileChange}
             />
             <div className="subtext">{file835Subtext}</div>
@@ -657,8 +688,9 @@ export default function ConversionsView({
                   const upDate = f.uploaded_at ? f.uploaded_at.substring(0, 10) : "—";
                   const upTime = f.uploaded_at ? f.uploaded_at.substring(11, 19) : "—";
                   const shortId = "R-" + f.id.substring(0, 6).toUpperCase();
-                  const baseName = (f.original_filename || "").replace(/\.[^/.]+$/, "");
-                  const mirName = "MIR_" + baseName + ".mir";
+                  const mirName = f.output_path
+                    ? f.output_path.split("/").pop()
+                    : "MIR_" + (f.original_filename || "").split(",")[0].trim().replace(/\.[^/.]+$/, "") + ".mir";
 
                   let statusTitle = "";
                   if (f.status === "PROCESSING") {

@@ -4,6 +4,25 @@ Pure Python implementation of EDI 835 / 853 parsing logic and MIR record generat
 """
 
 import math
+import re
+import datetime
+
+def extract_date_from_filename(filename):
+    if not filename:
+        return None
+    # Search for an 8-digit YYYYMMDD date string in filename
+    match = re.search(r'(20\d{6})', str(filename)) or re.search(r'(\d{8})', str(filename))
+    if match:
+        d_str = match.group(1)
+        try:
+            year = int(d_str[:4])
+            month = int(d_str[4:6])
+            day = int(d_str[6:8])
+            if 2000 <= year <= 2099 and 1 <= month <= 12 and 1 <= day <= 31:
+                return d_str
+        except Exception:
+            pass
+    return None
 
 def parse_decimal(val, default_val=0.0):
     if not val:
@@ -67,7 +86,7 @@ def parse_segments(text):
             segments.append(seg_str)
     return segments
 
-def parse_835(text):
+def parse_835(text, filename=None):
     claims = []
     current_claim = None
     current_service = None
@@ -79,6 +98,7 @@ def parse_835(text):
 
         if tag == "CLP":
             current_claim = {
+                "source_filename": filename,
                 "claim_number": parts[1].strip() if len(parts) > 1 else "",
                 "status": parts[2].strip() if len(parts) > 2 else "",
                 "total_charge": parse_decimal(parts[3] if len(parts) > 3 else "0"),
@@ -128,15 +148,13 @@ def parse_835(text):
                 current_service["service_date"] = val
         elif tag == "SVC":
             composite = parts[1].strip() if len(parts) > 1 else ""
-            procedure = composite.split(":")[1] if ":" in composite else composite
-            charge = parse_decimal(parts[2] if len(parts) > 2 else "0")
-            paid = parse_decimal(parts[3] if len(parts) > 3 else "0")
-            units = parse_decimal(parts[5] if len(parts) > 5 else "1", 1.0)
+            svc_code = composite.split(":")[0].strip() if composite else ""
             current_service = {
-                "procedure": procedure,
-                "charge": charge,
-                "paid": paid,
-                "units": units,
+                "service_code": svc_code,
+                "charge": parse_decimal(parts[2] if len(parts) > 2 else "0"),
+                "paid": parse_decimal(parts[3] if len(parts) > 3 else "0"),
+                "units": parse_decimal(parts[5] if len(parts) > 5 else "1", 1.0),
+                "service_date": "",
                 "adjustments": []
             }
             current_claim["services"].append(current_service)
@@ -144,8 +162,8 @@ def parse_835(text):
             group = parts[1].strip().upper() if len(parts) > 1 else ""
             idx = 2
             while idx < len(parts):
-                reason = parts[idx].strip().upper() if idx < len(parts) else ""
-                amount_text = parts[idx + 1].strip() if idx + 1 < len(parts) else ""
+                reason = parts[idx].strip() if idx < len(parts) else ""
+                amount_text = parts[idx + 1].strip() if idx + 1 < len(parts) else "0"
                 quantity = parts[idx + 2].strip() if idx + 2 < len(parts) else ""
                 if reason:
                     current_service["adjustments"].append({
@@ -221,19 +239,29 @@ def get_service_status_and_reason(service, claim_status, inherited_reason=""):
         "reason": ""
     }
 
-def build_mir_header(claim, sequence, max_sequence, service_count):
+def build_mir_header(claim, sequence, max_sequence, service_count, filename=None):
     b = [" "] * 334
     primary_reason = get_claim_primary_reason(claim)
+
+    # Processing date (current date) in YYYYMMDDYYYYMMDD format (16 characters total across pos 37 and pos 45)
+    processing_date_8 = datetime.date.today().strftime("%Y%m%d")
 
     put_field(b, 1, 2, "MO")
     put_field(b, 3, 17, claim.get("claim_number", ""))
     put_field(b, 20, 6, claim.get("claim_reference", ""))
-    put_field(b, 37, 8, "")
-    put_field(b, 45, 8, "")
+    # Position 37: Date of processing in YYYYMMDDYYYYMMDD format (16 characters total across pos 37 and pos 45)
+    put_field(b, 37, 8, processing_date_8)
+    put_field(b, 45, 8, processing_date_8)
     put_field(b, 53, 1, claim.get("status", ""))
     put_field(b, 55, 5, primary_reason)
     put_field(b, 60, 12, normalize_member_id(claim.get("subscriber_id", "")))
-    put_field(b, 77, 8, claim.get("group_number", ""))
+    
+    # Position 77: Group number (if empty or missing, replace with 99999999)
+    grp_num = (claim.get("group_number") or "").strip()
+    if not grp_num:
+        grp_num = "99999999"
+    put_field(b, 77, 8, grp_num)
+
     put_field(b, 86, 20, claim.get("patient_last_name", ""))
     put_field(b, 106, 10, claim.get("patient_first_name", ""))
     put_field(b, 116, 1, claim.get("patient_middle", ""))
@@ -298,7 +326,7 @@ def build_mir_service_block(service, claim_status, inherited_reason=""):
 
     return "".join(b)
 
-def generate_mir_text(claims):
+def generate_mir_text(claims, filename=None):
     records = []
     total_services = 0
 
@@ -316,14 +344,16 @@ def generate_mir_text(claims):
 
         max_sequence = len(chunks)
         inherited_reason = get_claim_primary_reason(claim)
+        claim_fn = filename or claim.get("source_filename")
 
         for seq_idx, chunk in enumerate(chunks, start=1):
-            rec = build_mir_header(claim, seq_idx, max_sequence, len(chunk))
+            rec = build_mir_header(claim, seq_idx, max_sequence, len(chunk), filename=claim_fn)
             for svc in chunk:
                 rec += build_mir_service_block(svc, claim.get("status", ""), inherited_reason)
             records.append(rec)
 
-    text = "\r\n".join(records) + ("\r\n" if records else "")
+    # Join records cleanly without extra blank line gaps
+    text = "\n".join([r.strip() for r in records if r and r.strip()]) + ("\n" if records else "")
     return {
         "text": text,
         "claims_count": len(claims),
@@ -331,8 +361,8 @@ def generate_mir_text(claims):
         "records_count": len(records)
     }
 
-def parse_835_to_mir(text):
-    claims = parse_835(text)
+def parse_835_to_mir(text, filename=None):
+    claims = parse_835(text, filename=filename)
     if not claims:
         raise ValueError("No CLP claim segments were found in the provided EDI content.")
-    return generate_mir_text(claims)
+    return generate_mir_text(claims, filename=filename)
