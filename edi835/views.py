@@ -45,7 +45,11 @@ def api_process_tracked_file(request):
     if not edi_text:
         return JsonResponse({"error": "Please provide EDI 835 text or upload a file."}, status=400)
 
-    res = process_edi835_file_content(edi_text, original_filename=original_filename)
+    client = None
+    if request.user and request.user.is_authenticated:
+        client = getattr(request.user, "client", None)
+
+    res = process_edi835_file_content(edi_text, original_filename=original_filename, client=client)
 
     if not res.get("success"):
         return JsonResponse({
@@ -1164,7 +1168,16 @@ def api_start_batch_conversion(request):
     archive_dir = dirs["archive"]
     output_dir = dirs["output"]
 
-    config = SFTPConfig.objects.first()
+    client = None
+    if request.user and request.user.is_authenticated:
+        client = getattr(request.user, "client", None)
+
+    if client:
+        config = SFTPConfig.objects.filter(client=client).first()
+    else:
+        config = SFTPConfig.objects.first()
+        if config:
+            client = config.client
     processed_files = []
     errors = []
 
@@ -1283,7 +1296,7 @@ def api_start_batch_conversion(request):
     # Combine all SFTP and local inbound items into ONE SINGLE batch conversion for a single MIR file
     combined_items = sftp_batch_items + local_batch_items
     if combined_items:
-        batch_res = process_multiple_edi835_files(combined_items)
+        batch_res = process_multiple_edi835_files(combined_items, client=client)
         if batch_res.get("success"):
             processed_files.extend([item["filename"] for item in combined_items])
             # Clean up SFTP remote files if SFTP client is available or reconnect if needed
