@@ -820,16 +820,63 @@ def api_admin_step_validate_835(request, client_id):
         return JsonResponse({"success": False, "error": "Only POST allowed"}, status=405)
     try:
         client_obj = Client.objects.get(id=client_id)
-        doc = ClientDocument.objects.filter(client=client_obj, document_type="Onboarding Step 7").order_by('-created_at').first()
-        if doc and doc.file:
-            edi_bytes = doc.file.read()
-            raw_text = edi_bytes.decode('utf-8', errors='replace')
-            ok, checks = validate_x12_835_content(raw_text)
-            if not ok:
-                err_msg = next((c["detail"] for c in checks if not c.get("ok")), "835 Structural Validation Failed")
-                return JsonResponse({"success": False, "error": err_msg, "checks": checks}, status=400)
-        else:
-            checks = [{"ok": True, "label": "Structure", "detail": "835 structural and balance checks passed."}]
+        
+        file_bytes = request.body
+        if not file_bytes:
+            return JsonResponse({"success": False, "error": "No file uploaded"}, status=400)
+            
+        raw_text = file_bytes.decode('utf-8', errors='replace')
+        from converter.services.validator import EDI835Validator
+        validator = EDI835Validator()
+        report = validator.validate(raw_text)
+        is_valid = report.get('valid', report.get('is_valid', True))
+        
+        if not is_valid:
+            errors = report.get('errors', [])
+            err_msg = "EDI Validation Failed. " + (errors[0] if errors else "Errors found.")
+            checks = [{"ok": False, "label": "Structure", "detail": e} for e in errors]
+            return JsonResponse({"success": False, "error": err_msg, "checks": checks}, status=400)
+            
+        checks = [{"ok": True, "label": "Structure", "detail": f"835 structural and balance checks passed. Claims found: {report.get('claims', 0)}"}]
+        
+        # Save as ClientDocument now that it is valid
+        filename = request.headers.get('X-Filename', '835_file.x12')
+        doc_name = f"Step 7: 835 File Validation"
+        from admin_panel.models import ClientDocument
+        from django.core.files.base import ContentFile
+        
+        doc = ClientDocument.objects.create(
+            client=client_obj,
+            document_name=doc_name,
+            original_filename=filename,
+            document_type="Onboarding Step 7",
+            file_size=len(file_bytes),
+            uploaded_by="Admin User"
+        )
+        doc.file.save(filename, ContentFile(file_bytes), save=True)
+        
+        # Also store it as EDI835File for the client
+        from pathlib import Path
+        from django.conf import settings
+        from edi835.services import get_edi835_storage_dirs
+        from edi835.models import EDI835File
+        
+        dirs = get_edi835_storage_dirs()
+        archive_file_path = dirs["archive"] / filename
+        with open(archive_file_path, "wb") as f:
+            f.write(file_bytes)
+        rel_archive_path = (Path("media") / "edi835" / "archive" / filename).as_posix()
+        
+        EDI835File.objects.create(
+            client=client_obj,
+            original_filename=filename,
+            stored_filename=filename,
+            status="PROCESSING",
+            claims_count=report.get('claims', 0),
+            archive_path=rel_archive_path,
+            input_path=rel_archive_path,
+            present_in_archive_folder=True,
+        )
 
         step_def = OnboardingStepDefinition.objects.get(step_number=7)
         step_status, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step_def)
