@@ -7,6 +7,15 @@ from django.views.decorators.csrf import csrf_exempt
 from accounts.models import Client, User
 from edi835.models import EDI835File
 from .models import OnboardingStepDefinition, ClientStepStatus, GoLiveStepDefinition, ClientGoLiveStatus, ClientTestEnvironment, AuditLog
+from .document_validator import extract_text_from_file_bytes, validate_document_text
+from validation import (
+    validate_step_upload,
+    validate_golive_step_upload,
+    validate_phone_number,
+    validate_email_address,
+    validate_x12_835_content,
+    get_step_download_filename
+)
 
 
 @csrf_exempt
@@ -695,6 +704,20 @@ def api_admin_step_upload(request, client_id, step_key):
             client_obj = Client.objects.get(id=client_id)
             step_def = OnboardingStepDefinition.objects.get(step_number=step_num)
             
+            # Step Validation using validation.py engine
+            val_res = validate_step_upload(step_num, file_bytes, filename)
+
+            if not val_res.get("ok", True):
+                checks = val_res.get("checks", [])
+                err_msg = val_res.get("error")
+                if not err_msg and checks:
+                    err_msg = next((c["detail"] for c in checks if not c.get("ok")), "Validation failed")
+                return JsonResponse({
+                    "success": False,
+                    "error": err_msg or "Validation failed",
+                    "checks": checks
+                }, status=400)
+
             # Save file as ClientDocument
             if file_bytes:
                 doc_name = f"Step {step_num}: {step_def.title}"
@@ -715,8 +738,14 @@ def api_admin_step_upload(request, client_id, step_key):
             step_status.status = 'COMPLETED'
             step_status.save()
             update_client_onboarding_stats(client_obj)
-    except Exception:
-        pass
+
+            return JsonResponse({
+                "success": True,
+                "message": "File uploaded and step completed.",
+                "checks": val_res.get("checks", [])
+            })
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
 
     return JsonResponse({"success": True, "message": "File uploaded and step completed.", "checks": []})
 
@@ -781,14 +810,26 @@ def api_admin_step_validate_835(request, client_id):
         return JsonResponse({"success": False, "error": "Only POST allowed"}, status=405)
     try:
         client_obj = Client.objects.get(id=client_id)
+        doc = ClientDocument.objects.filter(client=client_obj, document_type="Onboarding Step 7").order_by('-created_at').first()
+        if doc and doc.file:
+            edi_bytes = doc.file.read()
+            raw_text = edi_bytes.decode('utf-8', errors='replace')
+            ok, checks = validate_x12_835_content(raw_text)
+            if not ok:
+                err_msg = next((c["detail"] for c in checks if not c.get("ok")), "835 Structural Validation Failed")
+                return JsonResponse({"success": False, "error": err_msg, "checks": checks}, status=400)
+        else:
+            checks = [{"ok": True, "label": "Structure", "detail": "835 structural and balance checks passed."}]
+
         step_def = OnboardingStepDefinition.objects.get(step_number=7)
         step_status, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step_def)
         step_status.status = 'COMPLETED'
         step_status.save()
         update_client_onboarding_stats(client_obj)
-    except Exception:
-        pass
-    return JsonResponse({"success": True, "checks": ["Structure is valid", "Balance matched"]})
+
+        return JsonResponse({"success": True, "checks": checks})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
 
 
 @csrf_exempt
@@ -802,20 +843,34 @@ def api_admin_step_action(request, client_id, step_key, action):
         if len(parts) >= 2:
             step_num = int(parts[1])
             client_obj = Client.objects.get(id=client_id)
-            
+            # Validate Step 4 Contact fields and save contact
             if action == "save" and step_num == 4:
-                import json
-                from accounts.models import ClientContact
                 try:
-                    data = json.loads(request.body.decode('utf-8'))
+                    import json
+                    from accounts.models import ClientContact
+                    
+                    body = json.loads(request.body.decode('utf-8'))
+                    email = body.get("email", "")
+                    phone = body.get("phone", "")
+
+                    if email:
+                        ok_email, err_email = validate_email_address(email)
+                        if not ok_email:
+                            return JsonResponse({"success": False, "error": err_email}, status=400)
+
+                    if phone:
+                        ok_phone, err_phone = validate_phone_number(phone)
+                        if not ok_phone:
+                            return JsonResponse({"success": False, "error": err_phone}, status=400)
+                            
                     ClientContact.objects.create(
                         client=client_obj,
-                        role_name=data.get('role_name', ''),
-                        name=data.get('employee_name', ''),
-                        email=data.get('email', ''),
-                        phone=data.get('phone', '')
+                        role_name=body.get('role_name', ''),
+                        name=body.get('employee_name', ''),
+                        email=email,
+                        phone=phone
                     )
-                except Exception as e:
+                except Exception:
                     pass
 
             step_def = OnboardingStepDefinition.objects.get(step_number=step_num)
@@ -823,8 +878,8 @@ def api_admin_step_action(request, client_id, step_key, action):
             step_status.status = 'COMPLETED'
             step_status.save()
             update_client_onboarding_stats(client_obj)
-    except Exception:
-        pass
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
         
     return JsonResponse({"success": True, "message": f"Action {action} on {step_key} completed successfully."})
 
@@ -870,7 +925,18 @@ def api_admin_client_documents_upload(request, client_id):
         client_obj = Client.objects.get(id=client_id)
     except Client.DoesNotExist:
         return JsonResponse({"success": False, "error": "Client not found"}, status=404)
-        
+
+    # Document Validation & Integrity Engine check
+    doc_text = extract_text_from_file_bytes(file_bytes, filename)
+    val_res = validate_document_text(doc_text, step_title=doc_name)
+
+    if not val_res["ok"]:
+        return JsonResponse({
+            "success": False,
+            "error": val_res["status_message"],
+            "checks": val_res["checks"]
+        }, status=400)
+
     doc = ClientDocument.objects.create(
         client=client_obj,
         document_name=doc_name,
@@ -881,7 +947,11 @@ def api_admin_client_documents_upload(request, client_id):
     )
     doc.file.save(filename, ContentFile(file_bytes), save=True)
     
-    return JsonResponse({"success": True, "message": "Document uploaded successfully"})
+    return JsonResponse({
+        "success": True,
+        "message": "Document uploaded successfully",
+        "checks": val_res["checks"]
+    })
 
 
 @csrf_exempt
@@ -1072,12 +1142,27 @@ def api_admin_golive_state(request, client_id):
 @csrf_exempt
 def api_admin_golive_step_upload(request, client_id, step_num):
     """ POST /admin-panel/api/clients/<client_id>/golive/steps/<step_number>/upload/ """
+    file_bytes = request.body
+    filename = request.headers.get('X-Filename', 'uploaded_document.pdf')
+
     try:
         client_obj = Client.objects.get(id=client_id)
         step_def, _ = GoLiveStepDefinition.objects.get_or_create(
             step_number=step_num,
             defaults={"title": f"Go-Live Step {step_num}"}
         )
+
+        # Document Validation & Integrity Engine check
+        doc_text = extract_text_from_file_bytes(file_bytes, filename)
+        val_res = validate_document_text(doc_text, step_title=step_def.title)
+
+        if not val_res["ok"]:
+            return JsonResponse({
+                "success": False,
+                "error": val_res["status_message"],
+                "checks": val_res["checks"]
+            }, status=400)
+
         status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
         status_obj.status = 'COMPLETED'
         status_obj.save()
@@ -1088,11 +1173,15 @@ def api_admin_golive_step_upload(request, client_id, step_num):
             if next_status.status == 'PENDING':
                 next_status.status = 'IN_PROGRESS'
                 next_status.save()
+
+        state = helper_get_golive_state(client_obj)
+        return JsonResponse({
+            "success": True,
+            "state": state,
+            "checks": val_res["checks"]
+        })
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
-
-    state = helper_get_golive_state(client_obj)
-    return JsonResponse({"success": True, "state": state, "checks": ["Document validated", "Format accepted"]})
 
 
 @csrf_exempt
