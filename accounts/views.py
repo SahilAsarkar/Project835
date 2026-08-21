@@ -164,12 +164,24 @@ def api_user_info(request):
     user_name = getattr(request.user, "name", request.user.email)
     user_email = request.user.email
 
+    if request.user.is_superuser:
+        role_str = "Super Admin"
+    elif request.user.is_staff:
+        role_str = "Admin"
+    else:
+        role_str = "User"
+
+    client_str = request.user.client.name if (request.user.client and not request.user.is_staff and not request.user.is_superuser) else "OneSmarter"
+
     return JsonResponse({
         "authenticated": True,
         "user": {
             "name": user_name,
             "email": user_email,
             "is_staff": request.user.is_staff,
+            "is_superuser": request.user.is_superuser,
+            "role": role_str,
+            "client": client_str,
             "totp_enabled": totp_enabled,
             "totp_verified": totp_verified,
             "first_login": first_login
@@ -189,6 +201,23 @@ def api_login(request):
     form = LoginForm(data)
     if form.is_valid():
         user = form.user
+        
+        # Enforce route restrictions
+        is_admin_route = bool(data.get("isAdminRoute", False))
+        is_user_staff = bool(user.is_staff or user.is_superuser)
+        
+        if is_admin_route and not is_user_staff:
+            return JsonResponse({
+                "success": False,
+                "error": "Access Denied: Standard user credentials cannot be used for administrator login."
+            }, status=400)
+            
+        if not is_admin_route and is_user_staff:
+            return JsonResponse({
+                "success": False,
+                "error": "Access Denied: Administrative credentials cannot be used for standard user login."
+            }, status=400)
+
         login(request, user)
         
         totp_enabled = getattr(user, "totp_enabled", False)
@@ -201,6 +230,15 @@ def api_login(request):
             request.session["totp_setup_required"] = True
             next_step = "totp_setup"
 
+        if user.is_superuser:
+            role_str = "Super Admin"
+        elif user.is_staff:
+            role_str = "Admin"
+        else:
+            role_str = "User"
+
+        client_str = user.client.name if (user.client and not user.is_staff and not user.is_superuser) else "OneSmarter"
+
         return JsonResponse({
             "success": True,
             "next": next_step,
@@ -209,7 +247,10 @@ def api_login(request):
             "user": {
                 "name": getattr(user, "name", user.email),
                 "email": user.email,
-                "is_staff": user.is_staff
+                "is_staff": user.is_staff,
+                "is_superuser": user.is_superuser,
+                "role": role_str,
+                "client": client_str
             }
         })
 
@@ -744,14 +785,14 @@ def api_admin_delete_user(request, user_id):
         return JsonResponse({"success": True, "message": f"User '{email}' deleted successfully."})
     except User.DoesNotExist:
         return JsonResponse({"success": False, "error": "User not found."}, status=404)
+        return JsonResponse({"success": False, "error": "Client not found."}, status=404)
 
 
 @csrf_exempt
-def api_client_contacts(request):
-    """ GET /accounts/api/contacts/ """
-    if not request.user.is_authenticated:
-        return JsonResponse({"success": False, "error": "Not authenticated"}, status=401)
-    
+def api_admin_stats(request):
+    """
+    GET /accounts/api/admin/stats/
+    Returns admin overview counters.
     """
     total_clients = Client.objects.count()
     active_clients = Client.objects.filter(status="ACTIVE").count()
@@ -792,6 +833,14 @@ def api_admin_users(request):
 
     users_data = []
     for u in users_qs:
+        client_name = "None"
+        if u.is_superuser:
+            client_name = "OneSmarter"
+        elif u.is_staff:
+            client_name = "OneSmarter"
+        elif u.client:
+            client_name = u.client.name
+
         users_data.append({
             "id": u.id,
             "name": u.name,
@@ -799,11 +848,18 @@ def api_admin_users(request):
             "mobile": u.mobile,
             "is_active": u.is_active,
             "is_staff": u.is_staff,
+            "is_superuser": u.is_superuser,
+            "role": "Super Admin" if u.is_superuser else ("Admin" if u.is_staff else "User"),
             "totp_enabled": u.totp_enabled,
             "client_id": str(u.client.id) if u.client else None,
-            "client_name": u.client.name if u.client else None,
+            "client_name": client_name,
             "client_code": u.client.client_code if u.client else None,
             "created_at": u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else "",
+            "clients": [client_name],
+            "person": u.name,
+            "mfa": "Enabled" if u.totp_enabled else "Disabled",
+            "last_login": u.last_login.isoformat() if u.last_login else None,
+            "status": "Active" if u.is_active else "Inactive",
         })
 
     return JsonResponse({
@@ -831,7 +887,10 @@ def api_admin_create_user(request):
     email = (data.get("email") or "").strip().lower()
     mobile = (data.get("mobile") or "").strip()
     password = data.get("password") or "Password@123"
-    is_staff = bool(data.get("is_staff", False))
+    
+    role = data.get("role", "User")
+    is_staff = bool(data.get("is_staff", False) or role in ["Admin", "Super Admin"])
+    is_superuser = bool(data.get("is_superuser", False) or role == "Super Admin")
     client_id = data.get("client_id")
 
     if not name:
@@ -846,12 +905,19 @@ def api_admin_create_user(request):
     if User.objects.filter(mobile=mobile).exists():
         return JsonResponse({"success": False, "error": f"Mobile '{mobile}' is already registered."}, status=400)
 
+    # Permission check: Only superusers can create staff or superusers
+    if (is_staff or is_superuser) and not request.user.is_superuser:
+        return JsonResponse({"success": False, "error": "Access Denied: Only Super Admins can create Admin or Super Admin accounts."}, status=403)
+
     client_obj = None
-    if client_id:
-        try:
-            client_obj = Client.objects.get(id=client_id)
-        except Exception:
-            client_obj = None
+    if not is_staff:
+        if client_id:
+            try:
+                client_obj = Client.objects.get(id=client_id)
+            except Exception:
+                client_obj = None
+        if not client_obj:
+            return JsonResponse({"success": False, "error": "Client assignment is required for standard Users."}, status=400)
 
     user = User.objects.create_user(
         email=email,
@@ -859,6 +925,7 @@ def api_admin_create_user(request):
         mobile=mobile,
         password=password,
         is_staff=is_staff,
+        is_superuser=is_superuser,
         client=client_obj
     )
 
@@ -871,7 +938,9 @@ def api_admin_create_user(request):
             "email": user.email,
             "mobile": user.mobile,
             "is_staff": user.is_staff,
-            "client_name": client_obj.name if client_obj else None,
+            "is_superuser": user.is_superuser,
+            "role": "Super Admin" if user.is_superuser else ("Admin" if user.is_staff else "User"),
+            "client_name": client_obj.name if client_obj else ("OneSmarter" if is_staff else None),
         }
     })
 
@@ -895,25 +964,59 @@ def api_admin_update_user(request, user_id):
     except Exception:
         data = request.POST
 
+    # Permission check: Only Super Admins can edit Admins or Super Admins
+    if (user_obj.is_staff or user_obj.is_superuser) and not request.user.is_superuser:
+        return JsonResponse({"success": False, "error": "Access Denied: Only Super Admins can update Admin or Super Admin accounts."}, status=403)
+
+    role = data.get("role")
+    new_is_staff = user_obj.is_staff
+    new_is_superuser = user_obj.is_superuser
+
+    if "is_staff" in data or role:
+        new_is_staff = bool(data.get("is_staff", False) or role in ["Admin", "Super Admin"])
+    if "is_superuser" in data or role:
+        new_is_superuser = bool(data.get("is_superuser", False) or role == "Super Admin")
+
+    # If role settings changed, requester must be superuser
+    if (new_is_staff != user_obj.is_staff or new_is_superuser != user_obj.is_superuser) and not request.user.is_superuser:
+        return JsonResponse({"success": False, "error": "Access Denied: Only Super Admins can change administrative roles."}, status=403)
+
+    if "email" in data and data["email"].strip().lower():
+        email = data["email"].strip().lower()
+        if email != user_obj.email:
+            if User.objects.filter(email=email).exists():
+                return JsonResponse({"success": False, "error": f"Email '{email}' is already registered in the system."}, status=400)
+            user_obj.email = email
+
     if "name" in data and data["name"].strip():
         user_obj.name = data["name"].strip()
     if "mobile" in data and data["mobile"].strip():
-        user_obj.mobile = data["mobile"].strip()
+        mobile = data["mobile"].strip()
+        if mobile != user_obj.mobile:
+            if User.objects.filter(mobile=mobile).exists():
+                return JsonResponse({"success": False, "error": f"Mobile '{mobile}' is already registered in the system."}, status=400)
+            user_obj.mobile = mobile
     if "password" in data and data["password"].strip():
         user_obj.set_password(data["password"].strip())
     if "is_active" in data:
         user_obj.is_active = bool(data["is_active"])
-    if "is_staff" in data:
-        user_obj.is_staff = bool(data["is_staff"])
-    if "client_id" in data:
-        cid = data["client_id"]
-        if cid:
+    
+    user_obj.is_staff = new_is_staff
+    user_obj.is_superuser = new_is_superuser
+
+    if user_obj.is_staff:
+        user_obj.client = None
+    else:
+        if "client_id" in data:
+            cid = data["client_id"]
+            if not cid:
+                return JsonResponse({"success": False, "error": "Client assignment is required for standard Users."}, status=400)
             try:
                 user_obj.client = Client.objects.get(id=cid)
             except Exception:
-                user_obj.client = None
-        else:
-            user_obj.client = None
+                return JsonResponse({"success": False, "error": "Invalid client assigned."}, status=400)
+        elif not user_obj.client:
+            return JsonResponse({"success": False, "error": "Client assignment is required for standard Users."}, status=400)
 
     user_obj.save()
 
@@ -934,6 +1037,9 @@ def api_admin_delete_user(request, user_id):
 
     try:
         user_obj = User.objects.get(id=user_id)
+        # Permission check: Only Super Admins can delete Admins or Super Admins
+        if (user_obj.is_staff or user_obj.is_superuser) and not request.user.is_superuser:
+            return JsonResponse({"success": False, "error": "Access Denied: Only Super Admins can delete Admin or Super Admin accounts."}, status=403)
         email = user_obj.email
         user_obj.delete()
         return JsonResponse({"success": True, "message": f"User '{email}' deleted successfully."})

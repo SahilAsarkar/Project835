@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import CenteredModal from './CenteredModal';
 
-export default function CreateUserModal({ isOpen, onClose, onSave, clients }) {
+export default function CreateUserModal({ isOpen, onClose, onSave, clients, currentUser }) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
@@ -10,6 +10,8 @@ export default function CreateUserModal({ isOpen, onClose, onSave, clients }) {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.is_superuser;
 
   const handleCloseModal = () => {
     setErrorMsg('');
@@ -119,13 +121,17 @@ export default function CreateUserModal({ isOpen, onClose, onSave, clients }) {
             required
           />
         </div>
-        <div className="field">
-          <label>Role</label>
-          <select value={role} onChange={e => { setRole(e.target.value); setErrorMsg(''); }}>
-            <option value="User">User (Standard Access)</option>
-            <option value="Admin">Admin (Full Access)</option>
-          </select>
-        </div>
+        
+        {isSuperAdmin && (
+          <div className="field">
+            <label>Role</label>
+            <select value={role} onChange={e => { setRole(e.target.value); setErrorMsg(''); }}>
+              <option value="User">User (Standard Access)</option>
+              <option value="Admin">Admin (Full Access)</option>
+              <option value="Super Admin">Super Admin (System Owner)</option>
+            </select>
+          </div>
+        )}
         
         {role === 'User' && (
           <div className="field">

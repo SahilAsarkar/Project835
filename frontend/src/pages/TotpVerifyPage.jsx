@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { safeFetchJson } from "../utils/api";
 
-export default function TotpVerifyPage({ onVerifySuccess }) {
+export default function TotpVerifyPage({ onVerifySuccess, onLogout }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -31,19 +31,22 @@ export default function TotpVerifyPage({ onVerifySuccess }) {
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-wrapper">
+      <div className="auth-brand">
+        ONESMARTER <span>/ SECURITY</span>
+      </div>
       <div className="auth-card">
         <h1>Two-Factor Verification</h1>
         <p className="sub">Enter the 6-digit code from your authenticator app.</p>
 
         {error && (
-          <div className="error-msg">
+          <div className="error-msg" style={{ marginBottom: "20px" }}>
             <p>{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div>
+          <div className="field">
             <label>Authenticator Code</label>
             <input
               type="text"
@@ -59,6 +62,26 @@ export default function TotpVerifyPage({ onVerifySuccess }) {
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? "Verifying..." : "Verify Authentication"}
           </button>
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "center",
+                marginTop: "16px",
+                color: "var(--ink-2)",
+                textDecoration: "underline",
+                fontSize: "13px",
+                border: "none",
+                background: "none",
+                cursor: "pointer"
+              }}
+            >
+              Cancel & Log Out
+            </button>
+          )}
         </form>
       </div>
     </div>

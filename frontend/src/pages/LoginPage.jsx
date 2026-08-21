@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { safeFetchJson } from "../utils/api";
 
-export default function LoginPage({ onLoginSuccess, onNavigate }) {
+export default function LoginPage({ onLoginSuccess, isAdminRoute }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
@@ -16,7 +16,7 @@ export default function LoginPage({ onLoginSuccess, onNavigate }) {
       const { res, data } = await safeFetchJson("/accounts/api/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, isAdminRoute }),
       });
 
       if (!res.ok || !data.success) {
@@ -31,44 +31,67 @@ export default function LoginPage({ onLoginSuccess, onNavigate }) {
     }
   };
 
+  const brandLabel = isAdminRoute ? (
+    <div className="auth-brand">
+      ONESMARTER <span>/ ADMIN</span>
+    </div>
+  ) : (
+    <div className="auth-brand">
+      ONESMARTER <span>/ PORTAL</span>
+    </div>
+  );
+
+  const title = isAdminRoute ? "Admin Sign In" : "Sign In";
+  const subtitle = isAdminRoute
+    ? "Administrator access to client onboarding, compliance evidence, and integrations."
+    : "MIR Relay · EDI 835 Conversion Operations";
+
+  const emailLabel = isAdminRoute ? "Work email" : "Email Address";
+  const footerText = isAdminRoute
+    ? "Access is restricted to authorized OneSmarter administrative staff."
+    : "Access is restricted to authorized OneSmarter client users.";
+
   return (
-    <div className="auth-container">
+    <div className="auth-wrapper">
+      {brandLabel}
       <div className="auth-card">
-        <h1>Sign In</h1>
-        <p className="sub">MIR Relay &bull; EDI 835 Conversion Operations</p>
+        <h1>{title}</h1>
+        <p className="sub">{subtitle}</p>
 
         {error && (
-          <div className="error-msg">
+          <div className="error-msg" style={{ marginBottom: "20px" }}>
             <p>{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div>
-            <label>Email Address</label>
+          <div className="field">
+            <label>{emailLabel}</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
+              placeholder="e.g. admin"
               required
               autoFocus
             />
           </div>
-          <div>
+          <div className="field">
             <label>Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="••••••••••••"
               required
             />
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Signing In..." : "Sign In"}
+            {loading ? "Continuing..." : "Continue"}
           </button>
         </form>
+
+        <div className="auth-footer">{footerText}</div>
       </div>
     </div>
   );
