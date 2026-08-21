@@ -29,7 +29,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const saved = localStorage.getItem("activeTab");
-      return saved && saved !== "admin" ? saved : "flow";
+      // Never restore 'conn' (Connections) tab - always start on 'flow'
+      // Also skip 'admin' which is a separate route
+      const skipTabs = ["admin", "conn"];
+      return saved && !skipTabs.includes(saved) ? saved : "flow";
     } catch (e) {
       return "flow";
     }
@@ -49,7 +52,10 @@ export default function App() {
     if (tab === "admin") return;
     setActiveTab(tab);
     try {
-      localStorage.setItem("activeTab", tab);
+      // Don't persist 'conn' to localStorage so it doesn't become the default
+      if (tab !== "conn") {
+        localStorage.setItem("activeTab", tab);
+      }
     } catch (e) {}
     setIsDrawerOpen(false);
   };
