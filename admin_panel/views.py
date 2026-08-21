@@ -558,6 +558,16 @@ def api_admin_client_state(request, client_id):
     except (Client.DoesNotExist, ValueError):
         return JsonResponse({"success": False, "error": "Client not found."}, status=404)
 
+    from accounts.models import ClientStepComment
+    comments_qs = ClientStepComment.objects.filter(client=client_obj).order_by('step_number', '-created_at')
+    latest_comments = {}
+    for c in comments_qs:
+        if c.step_number not in latest_comments:
+            latest_comments[c.step_number] = {
+                "note_text": c.comment,
+                "author": c.author
+            }
+
     step_defs = OnboardingStepDefinition.objects.all().order_by('step_number')
     step_statuses = ClientStepStatus.objects.filter(client=client_obj)
     status_map = {ss.step.id: ss.status for ss in step_statuses}
@@ -646,7 +656,7 @@ def api_admin_client_state(request, client_id):
             "ext": "pdf" if is_file_step else None,
             "extra": extra_data,
             "latestUpload": None,
-            "latestNote": None
+            "latestNote": latest_comments.get(step.step_number, None)
         })
 
     # Auto advance if no step is in progress
@@ -856,6 +866,27 @@ def api_admin_step_action(request, client_id, step_key, action):
                         email=data.get('email', ''),
                         phone=data.get('phone', '')
                     )
+                except Exception as e:
+                    pass
+
+            if action == "save" and step_num == 5:
+                import json
+                from accounts.models import ClientStepComment
+                try:
+                    data = json.loads(request.body.decode('utf-8'))
+                    verification_text = data.get('verification_text', '').strip()
+                    if verification_text:
+                        author = "System"
+                        if request.user and hasattr(request.user, "name") and request.user.name:
+                            author = request.user.name
+                        elif request.user and hasattr(request.user, "email") and request.user.email:
+                            author = request.user.email
+                        ClientStepComment.objects.create(
+                            client=client_obj,
+                            step_number=5,
+                            comment=verification_text,
+                            author=author
+                        )
                 except Exception as e:
                     pass
 
