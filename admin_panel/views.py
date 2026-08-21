@@ -923,3 +923,48 @@ def api_admin_client_edi_files(request, client_id):
             "error_message": f.error_message
         })
     return JsonResponse({"success": True, "files": file_list})
+
+
+from admin_panel.models import ClientTestEnvironment
+
+@csrf_exempt
+def api_admin_client_test_environment(request, client_id):
+    """ GET/PUT /admin-panel/api/clients/<client_id>/test-environment/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        return JsonResponse({"success": False, "error": "Client not found"}, status=404)
+        
+    env, created = ClientTestEnvironment.objects.get_or_create(
+        client=client_obj,
+        defaults={
+            "sftp_host": "sftp-test.internal",
+            "sftp_username": f"{client_obj.id}_sandbox",
+            "watched_folder": f"/relay/{client_obj.id}/in/835/",
+            "test_status": "In Progress"
+        }
+    )
+    
+    if request.method == "GET":
+        return JsonResponse({
+            "success": True,
+            "test_environment": {
+                "sftp_host": env.sftp_host,
+                "sftp_username": env.sftp_username,
+                "watched_folder": env.watched_folder,
+                "test_status": env.test_status
+            }
+        })
+    elif request.method == "PUT":
+        try:
+            data = json.loads(request.body)
+            env.sftp_host = data.get("sftp_host", env.sftp_host)
+            env.sftp_username = data.get("sftp_username", env.sftp_username)
+            env.watched_folder = data.get("watched_folder", env.watched_folder)
+            env.test_status = data.get("test_status", env.test_status)
+            env.save()
+            return JsonResponse({"success": True, "message": "Test environment updated."})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+    else:
+        return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
