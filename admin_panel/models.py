@@ -133,3 +133,28 @@ class MirMappingField(models.Model):
     def __str__(self):
         return f"{self.client.name} - {self.field_id}"
 
+
+class ClientSmtpConfig(models.Model):
+    SECURITY_CHOICES = [
+        ('STARTTLS', 'STARTTLS'),
+        ('SSL_TLS',  'SSL / TLS'),
+        ('NONE',     'None'),
+    ]
+
+    client        = models.OneToOneField(Client, on_delete=models.CASCADE, related_name='smtp_config')
+    sender_name   = models.CharField(max_length=255, default='OneSmarter Support')
+    sender_email  = models.EmailField(default='support@onesmarter.com')
+    smtp_host     = models.CharField(max_length=255, default='smtp.gmail.com')
+    smtp_port     = models.IntegerField(default=587)
+    smtp_username = models.CharField(max_length=255, default='support@onesmarter.com')
+    smtp_password = models.CharField(max_length=255, blank=True)
+    security      = models.CharField(max_length=20, choices=SECURITY_CHOICES, default='STARTTLS')
+    reply_to      = models.EmailField(blank=True, null=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'client_smtp_config'
+
+    def __str__(self):
+        return f"SMTP for {self.client.name} ({self.smtp_host})"

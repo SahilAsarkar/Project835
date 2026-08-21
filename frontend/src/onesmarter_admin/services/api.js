@@ -596,3 +596,23 @@ export async function deleteUser(userId) {
   if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete user.');
   return data;
 }
+
+export async function fetchClientSmtpConfig(clientId) {
+  const res = await fetch(`${BASE_URL}/clients/${encodeURIComponent(clientId)}/smtp/`, {
+    headers: getAuthHeaders()
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch SMTP config');
+  return data.config; // null if not yet configured
+}
+
+export async function saveClientSmtpConfig(clientId, payload) {
+  const res = await fetch(`${BASE_URL}/clients/${encodeURIComponent(clientId)}/smtp/`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to save SMTP config');
+  return data;
+}

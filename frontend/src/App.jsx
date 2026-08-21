@@ -144,8 +144,20 @@ export default function App() {
   }
 
   if (!userState || !userState.authenticated) {
+    // If on the client portal (not an admin route), redirect staff trying to use the client login
+    // away — they must use /administrator. We can't know yet (not logged in), so just show login.
     return <LoginPage onLoginSuccess={checkUserStatus} isAdminRoute={isAdminRoute} />;
   }
+
+  // ── Admin guard ──────────────────────────────────────────────────────────
+  // Staff/admin users have no business on the client-side portal.
+  // Redirect them to the admin portal immediately, regardless of which path
+  // they landed on. They must always authenticate through /administrator.
+  if (userState.authenticated && userState.user && userState.user.is_staff && !isAdminRoute) {
+    window.location.replace("/administrator");
+    return null; // nothing renders while redirect is in flight
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (userState.authenticated) {
     if (!userState.user.totp_enabled) {

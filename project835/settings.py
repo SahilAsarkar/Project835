@@ -17,6 +17,15 @@ ALLOWED_HOSTS = [
     "*",
 ]
 
+# ============================================================
+# SMTP FIELD ENCRYPTION
+# Used to encrypt SMTP passwords stored in the database.
+# IMPORTANT: Keep this key secret. In production, load from
+# an environment variable instead of hardcoding here.
+# Rotate this key only if you re-encrypt all existing rows.
+# ============================================================
+SMTP_FIELD_ENCRYPTION_KEY = "4xx_IBlROjL-jqvIVAF0VuN76EoOHbLoXOGNSfuwXLY="
+
 
 # ============================================================
 # APPLICATIONS

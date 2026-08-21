@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { uploadStepFile, validateStaged835, postStepData, downloadTemplateFile, fetchStepUploadFile, createUser } from '../services/api';
+import React, { useState, useRef, useEffect } from 'react';
+import { uploadStepFile, validateStaged835, postStepData, downloadTemplateFile, fetchStepUploadFile, createUser, fetchClientSmtpConfig, saveClientSmtpConfig } from '../services/api';
 import FeedbackModal from './modals/FeedbackModal';
 import FileViewerModal from './modals/FileViewerModal';
 import ClientSftpModal from './ClientSftpModal';
@@ -129,9 +129,17 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
   })();
 
   const [s10Notes, setS10Notes] = useState(step.extra?.submission?.submission_text || '');
-  const [s11Email, setS11Email] = useState('');
+  const [s11SenderName, setS11SenderName] = useState('');
+  const [s11SenderEmail, setS11SenderEmail] = useState('');
+  const [s11SmtpHost, setS11SmtpHost] = useState('');
+  const [s11SmtpPort, setS11SmtpPort] = useState('');
+  const [s11SmtpUsername, setS11SmtpUsername] = useState('');
   const [s11Password, setS11Password] = useState('');
+  const [s11Security, setS11Security] = useState('STARTTLS');
+  const [s11ReplyTo, setS11ReplyTo] = useState('');
   const [s11Sending, setS11Sending] = useState(false);
+  const [s11Loaded, setS11Loaded] = useState(false);
+  const [s11HasPassword, setS11HasPassword] = useState(false);
 
   const [s9Name, setS9Name] = useState('');
   const [s9Email, setS9Email] = useState('');
@@ -140,6 +148,28 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
 
   const datePickerRef = useRef(null);
   const [s13Date, setS13Date] = useState(() => formatToMMDDYYYY(step.extra?.schedule?.scheduled_date) || '');
+
+  // Load existing SMTP config for Step 11 on mount
+  useEffect(() => {
+    if (step.actionType !== 'send_ftp_action') return;
+    fetchClientSmtpConfig(clientId)
+      .then(cfg => {
+        if (cfg) {
+          if (cfg.sender_name)  setS11SenderName(cfg.sender_name);
+          if (cfg.sender_email) setS11SenderEmail(cfg.sender_email);
+          if (cfg.smtp_host)    setS11SmtpHost(cfg.smtp_host);
+          if (cfg.smtp_port)    setS11SmtpPort(String(cfg.smtp_port));
+          if (cfg.smtp_username)setS11SmtpUsername(cfg.smtp_username);
+          if (cfg.security)     setS11Security(cfg.security);
+          if (cfg.reply_to)     setS11ReplyTo(cfg.reply_to);
+          setS11HasPassword(Boolean(cfg.has_password));
+          // password is never returned from the server
+        }
+        setS11Loaded(true);
+      })
+      .catch(() => setS11Loaded(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, step.actionType]);
   const [s13Time, setS13Time] = useState(step.extra?.schedule?.scheduled_time || '10:00');
   const [s13Notes, setS13Notes] = useState(step.extra?.schedule?.notes || '');
 
@@ -897,72 +927,166 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
             )}
 
             {step.actionType === 'send_ftp_action' && (
-              <div className="step-custom-box" style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
-                <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Company Sender Configuration:
+              <div className="step-custom-box" style={{ padding: '12px 14px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                <div style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ink-2)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  SMTP / Email Configuration
                 </div>
-                <div style={{ marginBottom: '10px', fontSize: '12px', color: 'var(--ink)' }}>
-                  Configure the global admin email account to send the onboarding notification to the client. This will be securely saved to the server configuration.
+                <div style={{ fontSize: '11.5px', color: 'var(--ink)', marginBottom: '12px', lineHeight: 1.5 }}>
+                  Configure the sender email account for this client's onboarding notification. These settings are saved to the client record and will be used for all future emails to this client.
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                  <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
-                    <input 
-                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff' }}
+
+                {/* Row 1: Sender Name + Sender Email */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>Sender Name</div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
+                      type="text"
+                      value={s11SenderName}
+                      onChange={e => setS11SenderName(e.target.value)}
+                      placeholder="e.g. OneSmarter Support"
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>Sender Email</div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
                       type="email"
-                      placeholder="Sender Email Address *"
-                      value={s11Email}
-                      onChange={(e) => setS11Email(e.target.value)}
+                      value={s11SenderEmail}
+                      onChange={e => setS11SenderEmail(e.target.value)}
+                      placeholder="e.g. support@onesmarter.com"
                     />
                   </div>
-                  <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
-                    <input 
-                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff' }}
+                </div>
+
+                {/* Row 2: SMTP Host + Port */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '2 1 200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>SMTP Host</div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
+                      type="text"
+                      value={s11SmtpHost}
+                      onChange={e => setS11SmtpHost(e.target.value)}
+                      placeholder="smtp.gmail.com"
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 80px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>Port</div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
+                      type="text"
+                      value={s11SmtpPort}
+                      onChange={e => setS11SmtpPort(e.target.value)}
+                      placeholder="587"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: SMTP Username + Password */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>SMTP Username</div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
+                      type="text"
+                      autoComplete="off"
+                      value={s11SmtpUsername}
+                      onChange={e => setS11SmtpUsername(e.target.value)}
+                      placeholder="support@onesmarter.com"
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>SMTP Password</div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
                       type="password"
-                      placeholder="Email App Password *"
+                      autoComplete="new-password"
                       value={s11Password}
-                      onChange={(e) => setS11Password(e.target.value)}
+                      onChange={e => setS11Password(e.target.value)}
+                      placeholder={s11HasPassword && !s11Password ? '●●●●●●●● (saved — enter new to change)' : '••••••••'}
                     />
                   </div>
-                  <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'flex-start' }}>
-                    <button 
-                      className="btn tiny primary" 
-                      disabled={!s11Email.trim() || !s11Password.trim() || s11Sending}
-                      onClick={async () => {
-                        setS11Sending(true);
-                        try {
-                          const res = await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_11_send_ftp/send/`, {
-                            sender_email: s11Email.trim(),
-                            sender_password: s11Password.trim()
-                          });
-                          setFeedback({
-                            isOpen: true,
-                            kind: 'ok',
-                            title: res.title || 'Email Notification Sent',
-                            content: res.message || `Hello ${clientId}, we have sent the email notification.`,
-                            checks: res.checks || [
-                              { ok: true, label: 'Configuration Updated', detail: `Global sender email configured as ${s11Email.trim()}` },
-                              { ok: true, label: 'Notification Sent', detail: 'Email message successfully sent to the client. Step 11 marked as complete.' }
-                            ]
-                          });
-                          await onRefresh();
-                        } catch (err) { 
-                          setFeedback({ isOpen: true, kind: 'bad', title: 'Transmission Error', content: err.message, checks: [] }); 
-                        } finally {
-                          setS11Sending(false);
-                        }
-                      }}
-                      style={{ 
-                        padding: '6px 14px', 
-                        fontWeight: 600, 
-                        height: '29px',
-                        opacity: s11Sending ? 0.6 : 1,
-                        filter: s11Sending ? 'blur(0.5px)' : 'none',
-                        transition: 'opacity 0.2s, filter 0.2s'
-                      }}
+                </div>
+
+                {/* Row 4: Security + Reply-To */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 140px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>Security</div>
+                    <select
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box', cursor: 'pointer' }}
+                      value={s11Security}
+                      onChange={e => setS11Security(e.target.value)}
                     >
-                      {s11Sending ? '⏳ Sending...' : '🚀 Send Email Notification'}
-                    </button>
+                      <option value="STARTTLS">STARTTLS</option>
+                      <option value="SSL_TLS">SSL / TLS</option>
+                      <option value="NONE">None</option>
+                    </select>
                   </div>
+                  <div style={{ flex: '2 1 200px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>Reply-To Email <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span></div>
+                    <input
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box' }}
+                      type="email"
+                      value={s11ReplyTo}
+                      onChange={e => setS11ReplyTo(e.target.value)}
+                      placeholder="help@onesmarter.com"
+                    />
+                  </div>
+                </div>
+
+                {/* Action button */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    className="btn tiny primary"
+                    disabled={!s11SenderEmail.trim() || !s11SmtpHost.trim() || !s11SmtpUsername.trim() || s11Sending}
+                    onClick={async () => {
+                      setS11Sending(true);
+                      try {
+                        // 1. Save SMTP config to DB
+                        const smtpPayload = {
+                          sender_name:   s11SenderName.trim(),
+                          sender_email:  s11SenderEmail.trim(),
+                          smtp_host:     s11SmtpHost.trim(),
+                          smtp_port:     parseInt(s11SmtpPort, 10) || 587,
+                          smtp_username: s11SmtpUsername.trim(),
+                          smtp_password: s11Password.trim(),
+                          security:      s11Security,
+                          reply_to:      s11ReplyTo.trim() || null,
+                        };
+                        await saveClientSmtpConfig(clientId, smtpPayload);
+
+                        // 2. Trigger email notification + mark step complete
+                        const res = await postStepData(
+                          `/clients/${encodeURIComponent(clientId)}/steps/step_11_send_ftp/send/`,
+                          { ...smtpPayload }
+                        );
+                        setFeedback({
+                          isOpen: true,
+                          kind: 'ok',
+                          title: res.title || 'SMTP Config Saved',
+                          content: res.message || 'SMTP configuration has been saved and linked to this client.',
+                          checks: res.checks || [
+                            { ok: true, label: 'SMTP Configuration Saved', detail: `Sender: ${s11SenderName} <${s11SenderEmail}> via ${s11SmtpHost}:${s11SmtpPort}` },
+                            { ok: true, label: 'Client Record Updated', detail: 'SMTP settings are now linked to this client and ready for email delivery.' }
+                          ]
+                        });
+                        await onRefresh();
+                      } catch (err) {
+                        setFeedback({ isOpen: true, kind: 'bad', title: 'Save Error', content: err.message, checks: [] });
+                      } finally {
+                        setS11Sending(false);
+                      }
+                    }}
+                    style={{
+                      padding: '6px 16px',
+                      fontWeight: 600,
+                      opacity: s11Sending ? 0.6 : 1,
+                      transition: 'opacity 0.2s'
+                    }}
+                  >
+                    {s11Sending ? '⏳ Saving...' : '💾 Save SMTP Config & Complete'}
+                  </button>
                 </div>
               </div>
             )}

@@ -6,7 +6,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from accounts.models import Client, User
 from edi835.models import EDI835File
-from .models import OnboardingStepDefinition, ClientStepStatus, GoLiveStepDefinition, ClientGoLiveStatus, ClientTestEnvironment, AuditLog
+from .models import OnboardingStepDefinition, ClientStepStatus, GoLiveStepDefinition, ClientGoLiveStatus, ClientTestEnvironment, AuditLog, ClientSmtpConfig
+from .smtp_crypto import encrypt_smtp_password, decrypt_smtp_password
 from .document_validator import extract_text_from_file_bytes, validate_document_text
 from validation import (
     validate_step_upload,
@@ -944,7 +945,6 @@ def api_admin_step_action(request, client_id, step_key, action):
             client_obj = Client.objects.get(id=client_id)
             
             if action == "save" and step_num == 4:
-                import json
                 from accounts.models import ClientContact
                 try:
                     data = json.loads(request.body.decode('utf-8'))
@@ -958,8 +958,31 @@ def api_admin_step_action(request, client_id, step_key, action):
                 except Exception as e:
                     pass
 
+            # ── Step 11: persist SMTP config (password encrypted at rest) ───
+            if action == "send" and step_num == 11:
+                try:
+                    data = json.loads(request.body.decode('utf-8'))
+                    smtp_fields = {
+                        'sender_name':   data.get('sender_name', '').strip(),
+                        'sender_email':  data.get('sender_email', '').strip(),
+                        'smtp_host':     data.get('smtp_host', '').strip(),
+                        'smtp_port':     int(data.get('smtp_port', 587)),
+                        'smtp_username': data.get('smtp_username', '').strip(),
+                        'security':      data.get('security', 'STARTTLS').strip(),
+                        'reply_to':      data.get('reply_to', '').strip() or None,
+                    }
+                    plain_password = data.get('smtp_password', '').strip()
+                    if plain_password:
+                        smtp_fields['smtp_password'] = encrypt_smtp_password(plain_password)
+                    ClientSmtpConfig.objects.update_or_create(
+                        client=client_obj,
+                        defaults=smtp_fields
+                    )
+                except Exception as smtp_err:
+                    return JsonResponse({'success': False, 'error': f'SMTP save failed: {smtp_err}'}, status=400)
+            # ─────────────────────────────────────────────────────────────────
+
             if action == "save" and step_num in [5, 10]:
-                import json
                 from accounts.models import ClientStepComment
                 try:
                     data = json.loads(request.body.decode('utf-8'))
@@ -1007,6 +1030,64 @@ def api_admin_step_action(request, client_id, step_key, action):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
         
     return JsonResponse({"success": True, "message": f"Action {action} on {step_key} completed successfully."})
+
+
+@csrf_exempt
+def api_admin_client_smtp(request, client_id):
+    """
+    GET  /admin-panel/api/clients/<client_id>/smtp/  — load existing config (password never returned)
+    POST /admin-panel/api/clients/<client_id>/smtp/  — upsert config (password stored encrypted)
+    """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Client not found'}, status=404)
+
+    if request.method == 'GET':
+        try:
+            cfg = client_obj.smtp_config
+            return JsonResponse({
+                'success': True,
+                'config': {
+                    'sender_name':   cfg.sender_name,
+                    'sender_email':  cfg.sender_email,
+                    'smtp_host':     cfg.smtp_host,
+                    'smtp_port':     cfg.smtp_port,
+                    'smtp_username': cfg.smtp_username,
+                    'security':      cfg.security,
+                    'reply_to':      cfg.reply_to or '',
+                    # smtp_password intentionally NEVER sent to the browser
+                    'has_password':  bool(cfg.smtp_password),
+                }
+            })
+        except ClientSmtpConfig.DoesNotExist:
+            return JsonResponse({'success': True, 'config': None})
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+            smtp_fields = {
+                'sender_name':   data.get('sender_name', '').strip(),
+                'sender_email':  data.get('sender_email', '').strip(),
+                'smtp_host':     data.get('smtp_host', '').strip(),
+                'smtp_port':     int(data.get('smtp_port', 587)),
+                'smtp_username': data.get('smtp_username', '').strip(),
+                'security':      data.get('security', 'STARTTLS').strip(),
+                'reply_to':      data.get('reply_to', '').strip() or None,
+            }
+            plain_password = data.get('smtp_password', '').strip()
+            if plain_password:
+                # Encrypt before storing — only the server key can decrypt it
+                smtp_fields['smtp_password'] = encrypt_smtp_password(plain_password)
+            obj, created = ClientSmtpConfig.objects.update_or_create(
+                client=client_obj,
+                defaults=smtp_fields
+            )
+            return JsonResponse({'success': True, 'created': created})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
 
 
 from admin_panel.models import ClientDocument

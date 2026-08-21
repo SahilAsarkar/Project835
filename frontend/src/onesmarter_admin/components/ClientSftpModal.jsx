@@ -238,6 +238,7 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
                   <div style={{ display: 'flex', position: 'relative', alignItems: 'center' }}>
                     <input
                       type={showPass ? 'text' : 'password'}
+                      autoComplete="new-password"
                       placeholder={connected && !password ? '●●●●●●●● (saved — enter new to change)' : ''}
                       style={{ width: '100%', padding: '7px 34px 7px 9px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '13px', boxSizing: 'border-box', background: connected && !password ? '#f8fafc' : '#fff' }}
                       value={password}

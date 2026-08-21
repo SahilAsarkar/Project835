@@ -36,6 +36,7 @@ from .views import (
     api_mappings_view,
     api_mappings_check,
     api_mappings_reset,
+    api_admin_client_smtp,
 )
 
 urlpatterns = [
@@ -60,6 +61,7 @@ urlpatterns = [
     path("api/clients/<uuid:client_id>/steps/step_7_835_val/validate-uploaded/", api_admin_step_validate_835),
     path("api/clients/<uuid:client_id>/steps/<str:step_key>/<str:action>/", api_admin_step_action),
     path("api/clients/<uuid:client_id>/golive/state/", api_admin_golive_state),
+    path("api/clients/<uuid:client_id>/smtp/", api_admin_client_smtp, name="admin_api_client_smtp"),
     path("api/clients/<uuid:client_id>/golive/steps/<int:step_num>/upload/", api_admin_golive_step_upload),
     path("api/clients/<uuid:client_id>/golive/steps/<int:step_num>/download/", api_admin_golive_step_download),
     path("api/clients/<uuid:client_id>/golive/steps/3/sftp/", api_admin_golive_step3_sftp),
