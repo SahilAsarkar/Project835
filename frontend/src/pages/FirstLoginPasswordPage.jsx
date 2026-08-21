@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { safeFetchJson } from "../utils/api";
 
-export default function FirstLoginPasswordPage({ onPasswordChangeSuccess }) {
+export default function FirstLoginPasswordPage({ onPasswordChangeSuccess, onLogout }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState(null);
@@ -42,19 +42,22 @@ export default function FirstLoginPasswordPage({ onPasswordChangeSuccess }) {
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-wrapper">
+      <div className="auth-brand">
+        ONESMARTER <span>/ PASSWORD</span>
+      </div>
       <div className="auth-card">
         <h1>Reset Password</h1>
         <p className="sub">This is your first login. Please choose a new secure password.</p>
 
         {error && (
-          <div className="error-msg">
+          <div className="error-msg" style={{ marginBottom: "20px" }}>
             <p>{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div>
+          <div className="field">
             <label>New Password</label>
             <input
               type="password"
@@ -65,7 +68,7 @@ export default function FirstLoginPasswordPage({ onPasswordChangeSuccess }) {
               autoFocus
             />
           </div>
-          <div>
+          <div className="field">
             <label>Confirm Password</label>
             <input
               type="password"
@@ -78,6 +81,26 @@ export default function FirstLoginPasswordPage({ onPasswordChangeSuccess }) {
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? "Updating..." : "Update Password & Proceed"}
           </button>
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "center",
+                marginTop: "16px",
+                color: "var(--ink-2)",
+                textDecoration: "underline",
+                fontSize: "13px",
+                border: "none",
+                background: "none",
+                cursor: "pointer"
+              }}
+            >
+              Cancel & Log Out
+            </button>
+          )}
         </form>
       </div>
     </div>

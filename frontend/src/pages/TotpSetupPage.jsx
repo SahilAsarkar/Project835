@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { safeFetchJson } from "../utils/api";
 
-export default function TotpSetupPage({ onSetupSuccess, onGoDashboard }) {
+export default function TotpSetupPage({ onSetupSuccess, onGoDashboard, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState("");
   const [secret, setSecret] = useState("");
@@ -64,7 +64,10 @@ export default function TotpSetupPage({ onSetupSuccess, onGoDashboard }) {
   }
 
   return (
-    <div className="auth-container">
+    <div className="auth-wrapper">
+      <div className="auth-brand">
+        ONESMARTER <span>/ SECURITY</span>
+      </div>
       <div className="auth-card">
         <h1>Two-Factor Authentication</h1>
         <p className="sub">Configure Authenticator App</p>
@@ -181,6 +184,26 @@ export default function TotpSetupPage({ onSetupSuccess, onGoDashboard }) {
               <button type="submit" className="btn-primary" disabled={submitting}>
                 {submitting ? "Verifying..." : "Verify & Enable 2FA"}
               </button>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "center",
+                    marginTop: "16px",
+                    color: "var(--ink-2)",
+                    textDecoration: "underline",
+                    fontSize: "13px",
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel & Log Out
+                </button>
+              )}
             </form>
           </>
         )}

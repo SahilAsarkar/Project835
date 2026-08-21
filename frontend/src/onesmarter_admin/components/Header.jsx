@@ -1,9 +1,14 @@
 import React from 'react';
 
 export default function Header({ onSignOut, currentUser, onToggleSidebar }) {
-  const adminName = currentUser?.name || 'Sahil Asarkar';
-  const initials = adminName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'AH';
+  const displayName = currentUser?.name || currentUser?.email || 'Sahil Asarkar';
+  const initials = displayName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'SA';
   const role = currentUser?.role || 'CLIENT USER';
+  const clientName = currentUser?.client || 'OneSmarter';
+  
+  // Show person's name for Admins, and client company name for standard Users
+  const isSystemAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin' || currentUser?.is_staff || currentUser?.is_superuser;
+  const displayTitle = isSystemAdmin ? displayName : clientName;
 
   return (
     <div className="topbar">
@@ -38,7 +43,7 @@ export default function Header({ onSignOut, currentUser, onToggleSidebar }) {
       <div className="me">
         <div className="av">{initials}</div>
         <div>
-          <div>ABC Health Client</div>
+          <div>{displayTitle}</div>
           <div className="role">{role}</div>
         </div>
       </div>

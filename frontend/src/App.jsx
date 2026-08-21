@@ -144,18 +144,18 @@ export default function App() {
   }
 
   if (!userState || !userState.authenticated) {
-    return <LoginPage onLoginSuccess={checkUserStatus} />;
+    return <LoginPage onLoginSuccess={checkUserStatus} isAdminRoute={isAdminRoute} />;
   }
 
   if (userState.authenticated) {
     if (!userState.user.totp_enabled) {
-      return <TotpSetupPage onSetupSuccess={checkUserStatus} onGoDashboard={checkUserStatus} />;
+      return <TotpSetupPage onSetupSuccess={checkUserStatus} onGoDashboard={checkUserStatus} onLogout={handleLogout} />;
     }
     if (!userState.user.totp_verified) {
-      return <TotpVerifyPage onVerifySuccess={checkUserStatus} />;
+      return <TotpVerifyPage onVerifySuccess={checkUserStatus} onLogout={handleLogout} />;
     }
     if (userState.user.first_login) {
-      return <FirstLoginPasswordPage onPasswordChangeSuccess={checkUserStatus} />;
+      return <FirstLoginPasswordPage onPasswordChangeSuccess={checkUserStatus} onLogout={handleLogout} />;
     }
   }
 

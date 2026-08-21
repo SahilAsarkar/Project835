@@ -1228,3 +1228,110 @@ td.num {
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* Premium Login Card Styles */
+.auth-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #121824; /* Dark Navy theme background */
+  padding: 20px;
+}
+
+.auth-wrapper .auth-brand {
+  font-family: var(--display);
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 24px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.auth-wrapper .auth-brand span {
+  color: #64748b;
+  font-weight: 400;
+}
+
+.auth-wrapper .auth-card {
+  width: 100%;
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: none;
+  padding: 32px 40px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.auth-wrapper .auth-card h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.auth-wrapper .auth-card p.sub {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.auth-wrapper .auth-card label {
+  font-family: var(--body);
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #334155;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.auth-wrapper .auth-card input {
+  font-size: 15px !important;
+  padding: 12px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  margin-bottom: 20px !important;
+  outline: none !important;
+  width: 100%;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.auth-wrapper .auth-card input:focus {
+  border-color: #64748b !important;
+}
+
+.auth-wrapper .auth-card button.btn-primary,
+.auth-wrapper .auth-card button.btn-primary:active {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 14px 16px;
+  background: #1e293b;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  width: 100%;
+}
+
+.auth-wrapper .auth-card button.btn-primary:hover {
+  background: #0f172a;
+}
+
+.auth-wrapper .auth-card .auth-footer {
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+  margin: 32px -40px -40px -40px;
+  padding: 24px 40px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
+}
+

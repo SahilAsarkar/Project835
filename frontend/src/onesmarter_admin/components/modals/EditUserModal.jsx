@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CenteredModal from './CenteredModal';
 
-export default function EditUserModal({ isOpen, onClose, onSave, onDelete, clients, user }) {
+export default function EditUserModal({ isOpen, onClose, onSave, onDelete, clients, user, currentUser }) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
@@ -10,6 +10,8 @@ export default function EditUserModal({ isOpen, onClose, onSave, onDelete, clien
   const [newPassword, setNewPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.is_superuser;
 
   useEffect(() => {
     if (user) {
@@ -119,13 +121,21 @@ export default function EditUserModal({ isOpen, onClose, onSave, onDelete, clien
             onChange={(e) => setMobile(e.target.value)}
           />
         </div>
-        <div className="field">
-          <label>Role</label>
-          <select value={role} onChange={e => { setRole(e.target.value); setErrorMsg(''); }}>
-            <option value="User">User (Standard Access)</option>
-            <option value="Admin">Admin (Full Access)</option>
-          </select>
-        </div>
+        {isSuperAdmin ? (
+          <div className="field">
+            <label>Role</label>
+            <select value={role} onChange={e => { setRole(e.target.value); setErrorMsg(''); }}>
+              <option value="User">User (Standard Access)</option>
+              <option value="Admin">Admin (Full Access)</option>
+              <option value="Super Admin">Super Admin (System Owner)</option>
+            </select>
+          </div>
+        ) : (
+          <div className="field">
+            <label>Role</label>
+            <input value={role} readOnly style={{ background: 'var(--paper)', opacity: 0.8 }} />
+          </div>
+        )}
         
         {role === 'User' && (
           <div className="field">
