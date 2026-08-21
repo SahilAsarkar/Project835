@@ -101,7 +101,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
     return '';
   })();
 
-  const [s5Text, setS5Text] = useState(step.extra?.verification?.verification_text || '');
+  const [s5Text, setS5Text] = useState(step.latestNote?.note_text || step.extra?.verification?.verification_text || '');
   const [s6Method, setS6Method] = useState(step.extra?.transferConfig?.method || 'SFTP');
   const [s6SftpMode, setS6SftpMode] = useState(step.extra?.transferConfig?.notes?.includes('Pull') ? 'Pull' : 'Push');
   const [s6ApiUrl, setS6ApiUrl] = useState(step.extra?.transferConfig?.notes?.startsWith('https') ? step.extra.transferConfig.notes : '');
@@ -405,7 +405,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
 
         {step.latestNote && (
           <div className="ev" style={{ color: 'var(--ochre)' }}>
-            💬 Latest Note: "{step.latestNote.note_text}" — <i>{step.latestNote.author}</i>
+            Note: "{step.latestNote.note_text}" — <i>{step.latestNote.author}</i>
           </div>
         )}
 
@@ -594,9 +594,9 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
             )}
 
             {step.actionType === 'claim_verify' && (
-              <div className="step-custom-box">
-                <label style={{ fontWeight: 600, fontSize: 12, display: 'block', marginBottom: 4 }}>Claim System Verification Information:</label>
-                <textarea rows={2} style={{ width: '100%', padding: 6, border: '1px solid var(--line)', fontSize: 12.5 }} value={s5Text} onChange={(e) => setS5Text(e.target.value)} placeholder="e.g. Vendor hosted ClaimsCore Enterprise, SFTP outbound nightly 835 drops verified." />
+              <div className="step-custom-box" style={{ padding: '8px 12px' }}>
+                <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Claim System Verification Information</label>
+                <textarea rows={1} style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }} value={s5Text} onChange={(e) => setS5Text(e.target.value)} placeholder="e.g. Vendor hosted ClaimsCore Enterprise, SFTP outbound nightly 835 drops verified." />
                 <div style={{ marginTop: 6, textAlign: 'right' }}>
                   <button className="btn tiny primary" onClick={handleStep5Save}>Submit &amp; Complete Step 5</button>
                 </div>

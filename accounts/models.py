@@ -130,3 +130,15 @@ class EmployeeRole(models.Model):
 
     def __str__(self):
         return self.role_name
+
+class ClientStepComment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="step_comments")
+    step_number = models.IntegerField()
+    comment = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    author = models.CharField(max_length=100, default="System")
+
+    class Meta:
+        db_table = "client_step_comment"
+        ordering = ["-created_at"]
