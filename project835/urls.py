@@ -28,6 +28,8 @@ urlpatterns = [
     path("admin-panel/", include("admin_panel.urls")),
     path("home/", include("home.urls")),
     path("edi835/", include("edi835.urls")),
+    path("mapping/", home_view, name="mapping_route"),
+    path("mapping", home_view),
     path("", include("converter.urls")),
     path("", home_view, name="root"),
 ]

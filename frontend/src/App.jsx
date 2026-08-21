@@ -23,7 +23,7 @@ export default function App() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [isAdminRoute, setIsAdminRoute] = useState(() => {
     const path = window.location.pathname.toLowerCase();
-    return path.includes("adminstrator") || path.includes("administrator");
+    return path.includes("adminstrator") || path.includes("administrator") || path.startsWith("/mapping");
   });
 
   const [activeTab, setActiveTab] = useState(() => {
@@ -39,7 +39,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname.toLowerCase();
-      setIsAdminRoute(path.includes("adminstrator") || path.includes("administrator"));
+      setIsAdminRoute(path.includes("adminstrator") || path.includes("administrator") || path.startsWith("/mapping"));
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
