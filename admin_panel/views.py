@@ -984,18 +984,26 @@ def api_admin_client_documents(request, client_id):
     if request.method != "GET":
         return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
     
-    docs = ClientDocument.objects.filter(client_id=client_id)
+    docs = ClientDocument.objects.filter(client_id=client_id).order_by('-created_at')
+    seen_keys = set()
     doc_list = []
     for d in docs:
-        doc_list.append({
-            "id": str(d.id),
-            "document_name": d.document_name,
-            "original_filename": d.original_filename,
-            "document_type": d.document_type,
-            "file_size": d.file_size,
-            "uploaded_by": d.uploaded_by,
-            "created_at": d.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if d.created_at else ""
-        })
+        if d.document_type == 'General Document':
+            key = f"general_{d.document_name}"
+        else:
+            key = d.document_type
+            
+        if key not in seen_keys:
+            seen_keys.add(key)
+            doc_list.append({
+                "id": str(d.id),
+                "document_name": d.document_name,
+                "original_filename": d.original_filename,
+                "document_type": d.document_type,
+                "file_size": d.file_size,
+                "uploaded_by": d.uploaded_by,
+                "created_at": d.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if d.created_at else ""
+            })
     return JsonResponse({"success": True, "documents": doc_list})
 
 
