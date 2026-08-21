@@ -790,8 +790,6 @@ def api_admin_delete_user(request, user_id):
 
 
 @csrf_exempt
-<<<<<<< HEAD
-=======
 def api_admin_stats(request):
     """
     GET /accounts/api/admin/stats/
@@ -1051,14 +1049,11 @@ def api_admin_delete_user(request, user_id):
 
 
 @csrf_exempt
->>>>>>> 3b8beb79b88875433d1f050a428e874485c27460
 def api_client_contacts(request):
     """ GET /accounts/api/contacts/ """
     if not request.user.is_authenticated:
         return JsonResponse({"success": False, "error": "Not authenticated"}, status=401)
     
-<<<<<<< HEAD
-=======
     if not request.user.client:
         return JsonResponse({"success": False, "error": "User has no associated client"}, status=400)
         
@@ -1072,7 +1067,6 @@ def api_client_contacts(request):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
 
->>>>>>> 3b8beb79b88875433d1f050a428e874485c27460
 @csrf_exempt
 def api_change_password(request):
     if not request.user.is_authenticated:

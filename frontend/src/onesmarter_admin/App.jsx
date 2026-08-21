@@ -82,6 +82,8 @@ export default function App({ user, onLogout }) {
   const [recentLogins, setRecentLogins] = useState([]);
   const [auditClientFilter, setAuditClientFilter] = useState('');
   const [auditModuleFilter, setAuditModuleFilter] = useState('');
+  const [auditSortField, setAuditSortField] = useState('timestamp');
+  const [auditSortDirection, setAuditSortDirection] = useState('desc');
 
   // Modal states
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
@@ -155,6 +157,53 @@ export default function App({ user, onLogout }) {
     } catch (err) {
       console.error('Failed to load audit logs:', err);
     }
+  };
+
+  const handleAuditSort = (field) => {
+    if (auditSortField === field) {
+      setAuditSortDirection(auditSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setAuditSortField(field);
+      setAuditSortDirection('asc');
+    }
+  };
+
+  const getSortedAuditLogs = () => {
+    if (!auditLogs) return [];
+    const logs = [...auditLogs];
+    if (!auditSortField) return logs;
+    return logs.sort((a, b) => {
+      let valA = '';
+      let valB = '';
+      if (auditSortField === 'timestamp') {
+        valA = a.timestamp || '';
+        valB = b.timestamp || '';
+      } else if (auditSortField === 'module') {
+        valA = a.module || '';
+        valB = b.module || '';
+      } else if (auditSortField === 'action') {
+        valA = a.action || '';
+        valB = b.action || '';
+      } else if (auditSortField === 'client') {
+        valA = a.client_name || a.client || '';
+        valB = b.client_name || b.client || '';
+      } else if (auditSortField === 'performed_by') {
+        valA = a.performed_by || '';
+        valB = b.performed_by || '';
+      }
+      valA = valA.toString().toLowerCase();
+      valB = valB.toString().toLowerCase();
+      if (valA < valB) return auditSortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return auditSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const renderAuditSortIcon = (field) => {
+    if (auditSortField !== field) return <span style={{ marginLeft: '4px', opacity: 0.3, fontSize: '10px' }}>⇅</span>;
+    return auditSortDirection === 'asc' 
+      ? <span style={{ marginLeft: '4px', color: 'var(--teal)', fontSize: '10px' }}>▲</span>
+      : <span style={{ marginLeft: '4px', color: 'var(--teal)', fontSize: '10px' }}>▼</span>;
   };
 
   const loadClientWorkflow = async (clientId) => {
@@ -504,12 +553,22 @@ export default function App({ user, onLogout }) {
               <table>
                 <thead>
                   <tr>
-                    <th>When</th>
-                    <th>Module</th>
-                    <th>Action</th>
-                    <th>Client</th>
+                    <th onClick={() => handleAuditSort('timestamp')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      When {renderAuditSortIcon('timestamp')}
+                    </th>
+                    <th onClick={() => handleAuditSort('module')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Module {renderAuditSortIcon('module')}
+                    </th>
+                    <th onClick={() => handleAuditSort('action')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Action {renderAuditSortIcon('action')}
+                    </th>
+                    <th onClick={() => handleAuditSort('client')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Client {renderAuditSortIcon('client')}
+                    </th>
                     <th>Details</th>
-                    <th>Who</th>
+                    <th onClick={() => handleAuditSort('performed_by')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Who {renderAuditSortIcon('performed_by')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -520,7 +579,7 @@ export default function App({ user, onLogout }) {
                       </td>
                     </tr>
                   ) : (
-                    auditLogs.map((log) => (
+                    getSortedAuditLogs().map((log) => (
                       <tr key={log.id}>
                         <td className="num">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
                         <td><span className="tag" style={{ textTransform: 'uppercase', fontSize: '10px' }}>{log.module || 'SYSTEM'}</span></td>

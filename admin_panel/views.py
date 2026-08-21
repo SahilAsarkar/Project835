@@ -333,6 +333,9 @@ def api_admin_access_info(request):
     GET /admin-panel/api/access/info/
     Returns dynamic access control matrix from database users.
     """
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "error": "Not authenticated"}, status=401)
+
     staff_list = []
     for u in User.objects.select_related("client").all().order_by("-created_at"):
         staff_list.append({
@@ -340,25 +343,36 @@ def api_admin_access_info(request):
             "person": u.name or u.email.split("@")[0],
             "email": u.email,
             "mobile": u.mobile or "—",
-            "role": "Admin" if u.is_staff else "User",
-            "access": "Full Access" if u.is_staff else "Standard Access",
-            "clients": ["OneSmarter"] if u.is_staff else ([u.client.name] if u.client else ["None"]),
-            "mfa": "2FA TOTP Enabled" if u.totp_enabled else "Password Only",
-            "last_login": u.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if u.created_at else "",
+            "role": "Super Admin" if u.is_superuser else ("Admin" if u.is_staff else "User"),
+            "access": "Full Access" if (u.is_staff or u.is_superuser) else "Standard Access",
+            "clients": ["OneSmarter"] if (u.is_staff or u.is_superuser) else ([u.client.name] if u.client else ["None"]),
+            "mfa": "Enabled" if u.totp_enabled else "Disabled",
+            "last_login": u.last_login.isoformat() if u.last_login else "",
             "status": "Active" if u.is_active else "Inactive",
         })
+
+    cur_u = request.user
+    if cur_u.is_superuser:
+        cur_role = "Super Admin"
+    elif cur_u.is_staff:
+        cur_role = "Admin"
+    else:
+        cur_role = "User"
+
+    mfa_str = "Enabled" if cur_u.totp_enabled else "Disabled"
+    mfa_desc = "Hardware & TOTP Verified" if cur_u.totp_enabled else "Password Only"
 
     return JsonResponse({
         "success": True,
         "current_admin": {
-            "name": "Sahil Asarkar",
-            "role": "Admin",
-            "mfa_status": "Enabled",
-            "mfa_desc": "Hardware & TOTP Verified",
+            "name": cur_u.name or cur_u.email,
+            "role": cur_role,
+            "mfa_status": mfa_str,
+            "mfa_desc": mfa_desc,
             "session_state": "Active",
             "session_desc": "30-min auto-expire",
         },
-        "last_login": "2026-08-21T00:00:00Z",
+        "last_login": cur_u.last_login.isoformat() if cur_u.last_login else "",
         "staff": staff_list,
         "users": staff_list,
     })
