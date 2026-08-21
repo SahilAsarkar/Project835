@@ -56,9 +56,13 @@ def api_convert(request):
             original_filename = request.POST.get('original_filename', 'pasted_file.x12')
             file_id = request.POST.get('file_id')
 
+    client = None
+    if request.user and request.user.is_authenticated:
+        client = getattr(request.user, "client", None)
+
     # If multiple files provided, execute multi-file batch conversion into a SINGLE MIR file
     if files_list and len(files_list) > 0:
-        batch_res = process_multiple_edi835_files(files_list)
+        batch_res = process_multiple_edi835_files(files_list, client=client)
         if not batch_res.get("success"):
             return JsonResponse({'error': batch_res.get("error", "Multi-file conversion failed.")}, status=400)
 
@@ -109,7 +113,7 @@ def api_convert(request):
     if not edi_text:
         return JsonResponse({'error': 'Please provide EDI 835 text or upload file(s).'}, status=400)
 
-    res = process_edi835_file_content(edi_text, original_filename=original_filename, file_id=file_id)
+    res = process_edi835_file_content(edi_text, original_filename=original_filename, file_id=file_id, client=client)
 
     if not res.get("success"):
         return JsonResponse({
@@ -503,7 +507,7 @@ def api_get_file_content(request, file_id):
     # If MIR text doesn't exist on disk but we have 835 text, try parsing on the fly
     if not mir_text and edi_text:
         try:
-            res = parse_835_to_mir(edi_text)
+            res = parse_835_to_mir(edi_text, client=db_rec.client)
             mir_text = res.get("text", "")
         except Exception:
             pass

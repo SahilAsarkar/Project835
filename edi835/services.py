@@ -33,7 +33,7 @@ def get_edi835_storage_dirs():
     return dirs
 
 
-def upload_mir_to_sftp(local_file_path, mir_filename):
+def upload_mir_to_sftp(local_file_path, mir_filename, client=None):
     """
     Uploads converted .mir file directly to the configured remote SFTP outbound folder.
     """
@@ -44,7 +44,10 @@ def upload_mir_to_sftp(local_file_path, mir_filename):
         from .models import SFTPConfig
         import paramiko
 
-        cfg = SFTPConfig.objects.first()
+        if client:
+            cfg = SFTPConfig.objects.filter(client=client).first()
+        else:
+            cfg = SFTPConfig.objects.first()
         if not cfg:
             logger.warning("upload_mir_to_sftp: No SFTPConfig found in database.")
             return False
@@ -125,17 +128,22 @@ def push_file_record_to_sftp(file_id):
     Returns (success_boolean, message_string).
     """
     from .models import SFTPConfig, EDI835File
-    cfg = SFTPConfig.objects.first()
+    try:
+        rec = EDI835File.objects.get(id=file_id)
+    except (EDI835File.DoesNotExist, ValueError):
+        return False, "File record not found in database."
+
+    client = rec.client
+    if client:
+        cfg = SFTPConfig.objects.filter(client=client).first()
+    else:
+        cfg = SFTPConfig.objects.first()
+
     if not cfg:
         return False, "No SFTP connection configuration found. Please setup SFTP in Connections section first."
 
     if cfg.status != "CONNECTED":
         return False, f"SFTP connection is not active (Status: {cfg.status}). Please test and verify your SFTP credentials first."
-
-    try:
-        rec = EDI835File.objects.get(id=file_id)
-    except (EDI835File.DoesNotExist, ValueError):
-        return False, "File record not found in database."
 
     dirs = get_edi835_storage_dirs()
     success_mir = False
@@ -150,7 +158,7 @@ def push_file_record_to_sftp(file_id):
             mir_path = dirs["output"] / f"{base_name}.mir"
 
         if os.path.exists(mir_path):
-            success_mir = upload_mir_to_sftp(mir_path, mir_filename)
+            success_mir = upload_mir_to_sftp(mir_path, mir_filename, client=client)
 
     if success_mir:
         rec.present_in_sftp = True
@@ -240,7 +248,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
         rel_output_path = (Path("media") / "edi835" / "output" / mir_filename).as_posix()
 
         # Step 4b: Upload converted .mir file directly to configured SFTP outbound folder if active config exists
-        sftp_uploaded = upload_mir_to_sftp(output_mir_path, mir_filename)
+        sftp_uploaded = upload_mir_to_sftp(output_mir_path, mir_filename, client=client)
 
         # Step 5: Move original 835/x12 EDI file from processing/ to archive/
         archived_835_path = dirs["archive"] / stored_filename
@@ -289,14 +297,15 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
         }
 
 
-def process_multiple_edi835_files(files_list, ingestion_source="SFTP"):
+def process_multiple_edi835_files(files_list, ingestion_source="SFTP", client=None):
     """
     Takes a list of file items: [ {"filename": "f1.835", "content": "..."}, {"filename": "f2.835", "content": "..."} ]
     Parses claims from all 835 files, combines them into a SINGLE MIR output file,
     creates a SINGLE DB record in the table with multiple input names and single output name,
     saves the single MIR file to output/, archives individual 835 files, and uploads to SFTP outbound.
     """
-    from .parser import parse_835, generate_mir_text
+    from admin_panel.mir_mapper_logic.edi835_parser import parse_835
+    from admin_panel.mir_mapper_logic.mir_generator import generate_mir_text
     dirs = get_edi835_storage_dirs()
 
     all_claims = []
@@ -325,7 +334,7 @@ def process_multiple_edi835_files(files_list, ingestion_source="SFTP"):
             first_archive_rel_path = rel_archive_path
 
         try:
-            claims = parse_835(content, filename=fname)
+            claims = parse_835(content)
             all_claims.extend(claims)
         except Exception as e:
             errors.append(f"{fname}: {str(e)}")
@@ -338,8 +347,7 @@ def process_multiple_edi835_files(files_list, ingestion_source="SFTP"):
         }
 
     # Generate ONE single combined MIR file from all claims across all input 835 files
-    mir_res = generate_mir_text(all_claims, filename=file_names[0] if file_names else None)
-    mir_text = mir_res["text"]
+    mir_text, mir_res = generate_mir_text(all_claims, client=client)
 
     first_base_name = os.path.splitext(file_names[0])[0] if file_names else "batch"
     combined_base_name = f"MIR_COMBINED_{first_base_name}" if len(file_names) > 1 else f"MIR_{first_base_name}"
@@ -350,20 +358,25 @@ def process_multiple_edi835_files(files_list, ingestion_source="SFTP"):
     rel_output_path = (Path("media") / "edi835" / "output" / mir_filename).as_posix()
 
     # Upload single combined MIR file directly to configured SFTP outbound folder
-    sftp_uploaded = upload_mir_to_sftp(output_mir_path, mir_filename)
+    sftp_uploaded = upload_mir_to_sftp(output_mir_path, mir_filename, client=client)
 
     # Combine all input file names into a single string for table 835 IN column
     combined_inputs_str = ", ".join(file_names)
 
+    claims_count = mir_res.get("claims", 0) if isinstance(mir_res, dict) else getattr(mir_res, "get", lambda k, d: 0)("claims", 0)
+    services_count = mir_res.get("services", 0) if isinstance(mir_res, dict) else getattr(mir_res, "get", lambda k, d: 0)("services", 0)
+    records_count = mir_res.get("mir_records", 0) if isinstance(mir_res, dict) else getattr(mir_res, "get", lambda k, d: 0)("mir_records", 0)
+
     # Create or update a SINGLE DB record for this batch run
     db_rec = EDI835File.objects.create(
         id=uuid.uuid4(),
+        client=client,
         original_filename=combined_inputs_str,
         stored_filename=file_names[0] if file_names else "batch.835",
         status="ARCHIVED",
-        claims_count=mir_res["claims_count"],
-        services_count=mir_res["services_count"],
-        records_count=mir_res["records_count"],
+        claims_count=claims_count,
+        services_count=services_count,
+        records_count=records_count,
         output_path=rel_output_path,
         archive_path=first_archive_rel_path,
         present_in_sftp=sftp_uploaded,
@@ -377,9 +390,9 @@ def process_multiple_edi835_files(files_list, ingestion_source="SFTP"):
         "mir_text": mir_text,
         "combined_filename": mir_filename,
         "files_count": len(file_names),
-        "claims_count": mir_res["claims_count"],
-        "services_count": mir_res["services_count"],
-        "records_count": mir_res["records_count"],
+        "claims_count": claims_count,
+        "services_count": services_count,
+        "records_count": records_count,
         "sftp_uploaded": sftp_uploaded,
         "db_record": db_rec,
         "errors": errors,
