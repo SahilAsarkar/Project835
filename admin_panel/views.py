@@ -923,7 +923,7 @@ def api_admin_step_action(request, client_id, step_key, action):
                 except Exception as e:
                     pass
 
-            if action == "save" and step_num == 5:
+            if action == "save" and step_num in [5, 10]:
                 import json
                 from accounts.models import ClientStepComment
                 try:
@@ -937,7 +937,7 @@ def api_admin_step_action(request, client_id, step_key, action):
                             author = request.user.email
                         ClientStepComment.objects.create(
                             client=client_obj,
-                            step_number=5,
+                            step_number=step_num,
                             comment=verification_text,
                             author=author
                         )

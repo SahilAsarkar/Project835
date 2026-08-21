@@ -886,7 +886,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                       return; 
                     }
                     try {
-                      await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_10_test_review/complete/`, { submission_text: s10Notes });
+                      await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_10_test_review/save/`, { verification_text: s10Notes });
                       onRefresh();
                     } catch (err) { 
                       setFeedback({ isOpen: true, kind: 'bad', title: 'Submission Error', content: err.message, checks: [] }); 
