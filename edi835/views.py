@@ -223,7 +223,12 @@ def api_get_sftp_config(request):
     """
     API Endpoint: Returns active SFTP configuration and list of saved configurations from DB.
     """
-    configs = SFTPConfig.objects.all()
+    client_id = request.GET.get('client_id') or request.GET.get('client')
+    if client_id:
+        configs = SFTPConfig.objects.filter(client_id=client_id)
+    else:
+        configs = SFTPConfig.objects.filter(client__isnull=True)
+        
     active_config = configs.first()
 
     saved_list = []
@@ -703,16 +708,21 @@ def api_save_sftp_config(request):
     )
 
     config_id = body.get("id")
+    client_id = body.get("client_id") or body.get("client")
     config = None
     if config_id:
         config = SFTPConfig.objects.filter(id=config_id).first()
 
     if not config:
-        config = SFTPConfig.objects.filter(connection_type=connection_type).first()
+        if client_id:
+            config = SFTPConfig.objects.filter(connection_type=connection_type, client_id=client_id).first()
+        else:
+            config = SFTPConfig.objects.filter(connection_type=connection_type, client__isnull=True).first()
 
     if not config:
         config = SFTPConfig()
-
+        if client_id:
+            config.client_id = client_id
     config.name = f"{connection_type} Connection"
     config.use_same_server = use_same_server
     config.connection_type = connection_type

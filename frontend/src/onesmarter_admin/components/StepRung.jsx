@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { uploadStepFile, validateStaged835, postStepData, downloadTemplateFile, fetchStepUploadFile, createUser } from '../services/api';
 import FeedbackModal from './modals/FeedbackModal';
 import FileViewerModal from './modals/FileViewerModal';
+import ClientSftpModal from './ClientSftpModal';
 
 function formatDateTime(dateVal) {
   if (!dateVal) return 'N/A';
@@ -51,6 +52,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [validating835, setValidating835] = useState(false);
+  const [showSftpModal, setShowSftpModal] = useState(false);
 
   const [s4Name, setS4Name] = useState('');
   const [s4Role, setS4Role] = useState('Technical Contact');
@@ -109,6 +111,8 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
   const [s6Watched, setS6Watched] = useState(Boolean(step.extra?.transferConfig?.watched_folder_sftp));
   const [s6Keys, setS6Keys] = useState(Boolean(step.extra?.transferConfig?.keys_exchanged));
   const [s6NoChange, setS6NoChange] = useState(Boolean(step.extra?.transferConfig?.no_change_to_client_system));
+  const [s6SftpVerified, setS6SftpVerified] = useState(false);
+  const [s6SftpConfig, setS6SftpConfig] = useState(null);
 
   // Step 6 HTTPS API validation
   const s6ApiError = (() => {
@@ -277,10 +281,14 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
         return;
       }
     }
+    if (s6Method === 'SFTP' && !s6SftpVerified) {
+      setFeedback({ isOpen: true, kind: 'bad', title: 'SFTP Not Configured', content: 'Please configure and verify the SFTP connection before completing this step. All 3 folders must be set and the connection must pass.', checks: [] });
+      return;
+    }
 
     try {
-      const notesPayload = s6Method === 'SFTP' 
-        ? `SFTP Direction: ${s6SftpMode}` 
+      const notesPayload = s6Method === 'SFTP'
+        ? `SFTP Direction: ${s6SftpMode}${s6SftpConfig ? ` | Host: ${s6SftpConfig.host} | 835: ${s6SftpConfig.inbound_835_folder} | 837: ${s6SftpConfig.inbound_837_folder} | MIR: ${s6SftpConfig.outbound_mir_folder}` : ''}`
         : (s6Method === 'HTTPS API' ? s6ApiUrl.trim() : 'Manual Upload Direct');
 
       await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_6_transfer_method/save/`, {
@@ -642,10 +650,23 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                       <button 
                         type="button" 
                         className="btn tiny primary" 
-                        onClick={() => launchRedirect(`/sftp?client=${encodeURIComponent(clientId)}`, 'step_6_transfer_method')} 
+                        onClick={() => setShowSftpModal(true)} 
                         style={{ padding: '6px 12px', fontWeight: 600, whiteSpace: 'nowrap', height: '29px' }}
                       >
-                        Configure SFTP ↗
+                        {s6SftpVerified ? '✓ SFTP Configured' : 'Configure SFTP'}
+                      </button>
+                    </div>
+                  )}
+
+                  {s6Method === 'SFTP' && s6SftpVerified && (
+                    <div>
+                      <button 
+                        type="button" 
+                        className="btn tiny success" 
+                        onClick={handleStep6Save}
+                        style={{ padding: '6px 14px', fontWeight: 600, whiteSpace: 'nowrap', height: '29px' }}
+                      >
+                        ✓ Complete Step 6
                       </button>
                     </div>
                   )}
@@ -1124,6 +1145,17 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
         content={feedback.content}
         checks={feedback.checks}
       />
+      
+      {showSftpModal && (
+        <ClientSftpModal
+          clientId={clientId}
+          onClose={() => setShowSftpModal(false)}
+          onConfigured={(cfg) => {
+            setS6SftpVerified(true);
+            setS6SftpConfig(cfg);
+          }}
+        />
+      )}
     </div>
   );
 }

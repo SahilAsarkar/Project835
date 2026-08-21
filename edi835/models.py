@@ -120,6 +120,14 @@ class SFTPConfig(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client = models.ForeignKey(
+        'accounts.Client',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='sftp_configs',
+        help_text="Client associated with this SFTP config."
+    )
     name = models.CharField(max_length=255, default="SFTP Connection")
     connection_type = models.CharField(max_length=50, choices=CONNECTION_TYPES, default="UNIFIED")
     use_same_server = models.BooleanField(default=True)
