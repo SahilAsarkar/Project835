@@ -1236,14 +1236,17 @@ def api_admin_golive_step_upload(request, client_id, step_num):
         )
 
         # Document Validation & Integrity Engine check
-        doc_text = extract_text_from_file_bytes(file_bytes, filename)
-        val_res = validate_document_text(doc_text, step_title=step_def.title)
+        val_res = validate_golive_step_upload(step_num, file_bytes, filename)
 
-        if not val_res["ok"]:
+        if not val_res.get("ok", True):
+            checks = val_res.get("checks", [])
+            err_msg = val_res.get("error")
+            if not err_msg and checks:
+                err_msg = next((c["detail"] for c in checks if not c.get("ok")), "Validation failed")
             return JsonResponse({
                 "success": False,
-                "error": val_res["status_message"],
-                "checks": val_res["checks"]
+                "error": err_msg,
+                "checks": checks
             }, status=400)
 
         status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)

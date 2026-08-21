@@ -276,7 +276,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
     }
   };
 
-  const handleStep6Save = async () => {
+  const handleStep6Save = async (sftpConfigOverride = null) => {
     if (s6Method === 'HTTPS API') {
       setS6ApiTouched(true);
       const trimmed = s6ApiUrl.trim();
@@ -285,14 +285,16 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
         return;
       }
     }
-    if (s6Method === 'SFTP' && !s6SftpVerified) {
+    const finalConfig = sftpConfigOverride || s6SftpConfig;
+    const finalVerified = sftpConfigOverride ? true : s6SftpVerified;
+    if (s6Method === 'SFTP' && !finalVerified) {
       setFeedback({ isOpen: true, kind: 'bad', title: 'SFTP Not Configured', content: 'Please configure and verify the SFTP connection before completing this step. All 3 folders must be set and the connection must pass.', checks: [] });
       return;
     }
 
     try {
       const notesPayload = s6Method === 'SFTP'
-        ? `SFTP Direction: ${s6SftpMode}${s6SftpConfig ? ` | Host: ${s6SftpConfig.host} | 835: ${s6SftpConfig.inbound_835_folder} | 837: ${s6SftpConfig.inbound_837_folder} | MIR: ${s6SftpConfig.outbound_mir_folder}` : ''}`
+        ? `SFTP Direction: ${s6SftpMode}${finalConfig ? ` | Host: ${finalConfig.host} | 835: ${finalConfig.inbound_835_folder} | 837: ${finalConfig.inbound_837_folder} | MIR: ${finalConfig.outbound_mir_folder}` : ''}`
         : (s6Method === 'HTTPS API' ? s6ApiUrl.trim() : 'Manual Upload Direct');
 
       await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_6_transfer_method/save/`, {
@@ -662,18 +664,6 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                     </div>
                   )}
 
-                  {s6Method === 'SFTP' && s6SftpVerified && (
-                    <div>
-                      <button 
-                        type="button" 
-                        className="btn tiny success" 
-                        onClick={handleStep6Save}
-                        style={{ padding: '6px 14px', fontWeight: 600, whiteSpace: 'nowrap', height: '29px' }}
-                      >
-                        ✓ Complete Step 6
-                      </button>
-                    </div>
-                  )}
 
                   {s6Method === 'HTTPS API' && (
                     <>
@@ -1145,6 +1135,8 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
           onConfigured={(cfg) => {
             setS6SftpVerified(true);
             setS6SftpConfig(cfg);
+            setShowSftpModal(false);
+            handleStep6Save(cfg);
           }}
         />
       )}

@@ -61,14 +61,9 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
     });
   };
 
-  const handleSave = async () => {
-    // Validate all required fields
+  const handleSaveConnection = async () => {
     if (!host.trim() || !username.trim()) {
       setErrorMsg('Host and Username are required.');
-      return;
-    }
-    if (!inbound835.trim() || !outboundMir.trim()) {
-      setErrorMsg('835 Inbound Folder and MIR Outbound Folder are required. Please select all folders before saving.');
       return;
     }
     setSaving(true);
@@ -97,8 +92,53 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
       const data = await res.json();
       if (data.success || data.connected) {
         if (data.config_id) setConfigId(data.config_id);
-        setSuccessMsg('\u2713 Connection verified and saved! You can now complete Step 6.');
-        // Notify parent that SFTP is configured and verified
+        setSuccessMsg('Connection verified and saved! You can now configure the folders.');
+      } else {
+        setErrorMsg(data.error || 'Failed to connect to SFTP server.');
+      }
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePaths = async () => {
+    if (!host.trim() || !username.trim()) {
+      setErrorMsg('Host and Username are required.');
+      return;
+    }
+    if (!inbound835.trim() || !outboundMir.trim()) {
+      setErrorMsg('835 Inbound Folder and MIR Outbound Folder are required. Please select folders before saving.');
+      return;
+    }
+    setSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const payload = {
+        id: configId,
+        client_id: clientId,
+        use_same_server: true,
+        connection_type: "UNIFIED",
+        host,
+        port: parseInt(port || "22", 10),
+        username,
+        password,
+        auth_method: authMethod,
+        inbound_835_folder: inbound835,
+        inbound_837_folder: inbound837,
+        outbound_mir_folder: outboundMir,
+      };
+      const res = await fetch("/edi835/api/sftp/save/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success || data.connected) {
+        if (data.config_id) setConfigId(data.config_id);
+        setSuccessMsg('Folders verified and configuration complete!');
         if (onConfigured) {
           onConfigured({
             config_id: data.config_id || configId,
@@ -113,7 +153,7 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
           });
         }
       } else {
-        setErrorMsg(data.error || 'Failed to save configuration — connection test failed.');
+        setErrorMsg(data.error || 'Failed to verify folders — connection test failed.');
       }
     } catch (err) {
       setErrorMsg(err.message);
@@ -225,6 +265,27 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
                 </div>
               </div>
 
+              {/* Save & Test Connection button before path selection */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-4px' }}>
+                <button
+                  type="button"
+                  onClick={handleSaveConnection}
+                  disabled={saving}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'var(--teal, #0d9488)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600
+                  }}
+                >
+                  {saving ? 'Saving & Testing...' : 'Save & Test Connection'}
+                </button>
+              </div>
+
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <FolderBrowse label="835 Inbound Folder" value={inbound835} onChange={setInbound835} setter={setInbound835} />
                 <FolderBrowse label="837 Reference Folder" value={inbound837} onChange={setInbound837} setter={setInbound837} />
@@ -236,8 +297,8 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '6px', borderTop: '1px solid #e2e8f0' }}>
                 <button onClick={onClose} style={{ padding: '8px 18px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '5px', cursor: 'pointer', fontSize: '13px' }}>Close</button>
-                <button onClick={handleSave} disabled={saving} style={{ padding: '8px 18px', background: 'var(--teal, #0d9488)', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
-                  {saving ? 'Saving...' : 'Save & Test'}
+                <button onClick={handleSavePaths} disabled={saving} style={{ padding: '8px 18px', background: 'var(--teal, #0d9488)', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                  {saving ? 'Saving Paths...' : 'Save Paths'}
                 </button>
               </div>
             </div>
