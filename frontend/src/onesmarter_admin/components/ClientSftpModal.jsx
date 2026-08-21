@@ -19,6 +19,7 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [connected, setConnected] = useState(false);
 
   // Password visibility state (hold to reveal)
   const [showPass, setShowPass] = useState(false);
@@ -32,7 +33,7 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
         const res = await safeFetchJson(`/edi835/api/sftp/get/?client_id=${clientId}`);
         if (res.data && res.data.configurations) {
           const config = res.data.configurations.find(c => c.connection_type === 'UNIFIED') || res.data.active_config;
-          if (config) {
+        if (config) {
             setConfigId(config.id || '');
             setHost(config.host || '');
             setPort(config.port ? String(config.port) : '22');
@@ -41,6 +42,8 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
             setInbound835(config.inbound_835_folder || '');
             setInbound837(config.inbound_837_folder || '');
             setOutboundMir(config.outbound_mir_folder || '');
+            // Never pre-populate password from server — mark as already configured
+            if (config.host && config.username) setConnected(true);
           }
         }
       } catch (err) {
@@ -93,6 +96,8 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
       if (data.success || data.connected) {
         if (data.config_id) setConfigId(data.config_id);
         setSuccessMsg('Connection verified and saved! You can now configure the folders.');
+        setPassword('');   // Clear password from UI after successful connection
+        setConnected(true);
       } else {
         setErrorMsg(data.error || 'Failed to connect to SFTP server.');
       }
@@ -233,10 +238,10 @@ export default function ClientSftpModal({ clientId, onClose, onConfigured }) {
                   <div style={{ display: 'flex', position: 'relative', alignItems: 'center' }}>
                     <input
                       type={showPass ? 'text' : 'password'}
-                      placeholder={configId ? '••••••••' : ''}
-                      style={{ width: '100%', padding: '7px 34px 7px 9px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '13px', boxSizing: 'border-box' }}
+                      placeholder={connected && !password ? '●●●●●●●● (saved — enter new to change)' : ''}
+                      style={{ width: '100%', padding: '7px 34px 7px 9px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '13px', boxSizing: 'border-box', background: connected && !password ? '#f8fafc' : '#fff' }}
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={e => { setPassword(e.target.value); if (connected && e.target.value) setConnected(false); }}
                     />
                     <button
                       type="button"
