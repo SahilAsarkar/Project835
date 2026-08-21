@@ -21,6 +21,7 @@ from .views import (
     api_admin_update_user,
     api_admin_delete_user,
     api_client_contacts,
+    api_change_password,
 )
 
 urlpatterns = [
@@ -36,6 +37,7 @@ urlpatterns = [
     path("api/totp/verify/", api_totp_verify, name="api_totp_verify"),
     path("api/logout/", api_logout, name="api_logout"),
     path("api/contacts/", api_client_contacts, name="api_client_contacts"),
+    path("api/user/change-password/", api_change_password, name="api_change_password"),
     # Admin Panel API Endpoints
     path("api/admin/clients/", api_admin_clients, name="api_admin_clients"),
     path("api/admin/clients/create/", api_admin_create_client, name="api_admin_create_client"),

@@ -575,3 +575,24 @@ export async function resetMappings(clientId) {
   if (!res.ok) throw new Error(data.detail || 'Reset failed');
   return data;
 }
+
+export async function updateUser(userId, userData) {
+  const res = await fetch(`/admin-panel/api/users/${userId}/update/`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(userData)
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update user.');
+  return data;
+}
+
+export async function deleteUser(userId) {
+  const res = await fetch(`/admin-panel/api/users/${userId}/delete/`, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete user.');
+  return data;
+}
