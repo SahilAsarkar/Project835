@@ -725,9 +725,13 @@ def api_admin_step_file(request, client_id, step_key):
             doc_type = f"Onboarding Step {step_num}"
             doc = ClientDocument.objects.filter(client_id=client_id, document_type=doc_type).order_by('-created_at').first()
             if doc:
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(doc.original_filename)
+                if not content_type:
+                    content_type = "application/pdf" if doc.original_filename.lower().endswith(".pdf") else "application/octet-stream"
                 from django.http import HttpResponse
-                response = HttpResponse(doc.file.read(), content_type="application/octet-stream")
-                response['Content-Disposition'] = f'attachment; filename="{doc.original_filename}"'
+                response = HttpResponse(doc.file.read(), content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{doc.original_filename}"'
                 response['X-OneSmarter-Filename'] = doc.original_filename
                 return response
     except Exception:
@@ -867,8 +871,13 @@ def api_admin_document_download(request, doc_id):
         return JsonResponse({"success": False, "error": "Document not found"}, status=404)
         
     try:
-        response = HttpResponse(doc.file.read(), content_type="application/octet-stream")
-        response['Content-Disposition'] = f'attachment; filename="{doc.original_filename}"'
+        import mimetypes
+        content_type, _ = mimetypes.guess_type(doc.original_filename)
+        if not content_type:
+            content_type = "application/pdf" if doc.original_filename.lower().endswith(".pdf") else "application/octet-stream"
+        from django.http import HttpResponse
+        response = HttpResponse(doc.file.read(), content_type=content_type)
+        response['Content-Disposition'] = f'inline; filename="{doc.original_filename}"'
         response['X-OneSmarter-Filename'] = doc.original_filename
         return response
     except Exception as e:
