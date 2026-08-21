@@ -89,3 +89,23 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.module}] {self.action} by {self.performed_by} at {self.timestamp}"
+
+
+import uuid
+
+class ClientDocument(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='documents')
+    document_name = models.CharField(max_length=255)
+    original_filename = models.CharField(max_length=255)
+    document_type = models.CharField(max_length=100, default='General Document')
+    file = models.FileField(upload_to='documents/')
+    file_size = models.IntegerField(default=0)
+    uploaded_by = models.CharField(max_length=255, default='Admin User')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.document_name} ({self.client.name})"
