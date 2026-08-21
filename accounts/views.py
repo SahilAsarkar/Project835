@@ -152,28 +152,27 @@ import json
 
 def api_user_info(request):
     if not request.user.is_authenticated:
-        try:
-            from .models import User
-            user = User.objects.filter(email="sahilasarkar29@gmail.com").first()
-            if not user:
-                user = User.objects.first()
-            if user:
-                login(request, user)
-        except Exception:
-            pass
+        return JsonResponse({
+            "authenticated": False,
+            "user": None
+        })
 
-    request.session["totp_verified"] = True
+    totp_enabled = getattr(request.user, "totp_enabled", False)
+    totp_verified = request.session.get("totp_verified", False)
+    first_login = getattr(request.user, "first_login", True)
 
-    user_name = getattr(request.user, "name", "Sahil Asarkar") if (hasattr(request.user, "is_authenticated") and request.user.is_authenticated) else "Sahil Asarkar"
-    user_email = request.user.email if (hasattr(request.user, "is_authenticated") and request.user.is_authenticated) else "sahilasarkar29@gmail.com"
+    user_name = getattr(request.user, "name", request.user.email)
+    user_email = request.user.email
 
     return JsonResponse({
         "authenticated": True,
         "user": {
             "name": user_name,
             "email": user_email,
-            "totp_enabled": True,
-            "totp_verified": True
+            "is_staff": request.user.is_staff,
+            "totp_enabled": totp_enabled,
+            "totp_verified": totp_verified,
+            "first_login": first_login
         }
     })
 
@@ -191,13 +190,27 @@ def api_login(request):
     if form.is_valid():
         user = form.user
         login(request, user)
-        request.session["totp_verified"] = True
+        
+        totp_enabled = getattr(user, "totp_enabled", False)
+        if totp_enabled:
+            request.session["totp_verified"] = False
+            request.session["totp_setup_required"] = False
+            next_step = "totp_verify"
+        else:
+            request.session["totp_verified"] = False
+            request.session["totp_setup_required"] = True
+            next_step = "totp_setup"
+
         return JsonResponse({
             "success": True,
-            "next": "home",
-            "totp_enabled": True,
-            "totp_verified": True,
-            "user": {"name": getattr(user, "name", user.email), "email": user.email}
+            "next": next_step,
+            "totp_enabled": totp_enabled,
+            "totp_verified": False,
+            "user": {
+                "name": getattr(user, "name", user.email),
+                "email": user.email,
+                "is_staff": user.is_staff
+            }
         })
 
     errors = []
@@ -739,6 +752,201 @@ def api_client_contacts(request):
     if not request.user.is_authenticated:
         return JsonResponse({"success": False, "error": "Not authenticated"}, status=401)
     
+    """
+    total_clients = Client.objects.count()
+    active_clients = Client.objects.filter(status="ACTIVE").count()
+    inactive_clients = Client.objects.filter(status="INACTIVE").count()
+    total_users = User.objects.count()
+    total_conversions = EDI835File.objects.count()
+
+    return JsonResponse({
+        "success": True,
+        "total_clients": total_clients,
+        "active_clients": active_clients,
+        "inactive_clients": inactive_clients,
+        "total_users": total_users,
+        "total_conversions": total_conversions,
+        "system_status": "OPERATIONAL"
+    })
+
+
+# ==========================================
+# ADMIN USER MANAGEMENT API ENDPOINTS
+# ==========================================
+
+@csrf_exempt
+def api_admin_users(request):
+    """
+    GET /accounts/api/admin/users/
+    Returns list of all user accounts.
+    """
+    search_q = request.GET.get("search", "").strip()
+    users_qs = User.objects.select_related("client").all().order_by("-created_at")
+
+    if search_q:
+        users_qs = users_qs.filter(
+            models.Q(name__icontains=search_q) |
+            models.Q(email__icontains=search_q) |
+            models.Q(mobile__icontains=search_q)
+        )
+
+    users_data = []
+    for u in users_qs:
+        users_data.append({
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "mobile": u.mobile,
+            "is_active": u.is_active,
+            "is_staff": u.is_staff,
+            "totp_enabled": u.totp_enabled,
+            "client_id": str(u.client.id) if u.client else None,
+            "client_name": u.client.name if u.client else None,
+            "client_code": u.client.client_code if u.client else None,
+            "created_at": u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else "",
+        })
+
+    return JsonResponse({
+        "success": True,
+        "total_users": User.objects.count(),
+        "users": users_data
+    })
+
+
+@csrf_exempt
+def api_admin_create_user(request):
+    """
+    POST /accounts/api/admin/users/create/
+    Creates a new user account.
+    """
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Only POST method is allowed."}, status=405)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else request.POST
+    except Exception:
+        data = request.POST
+
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    mobile = (data.get("mobile") or "").strip()
+    password = data.get("password") or "Password@123"
+    is_staff = bool(data.get("is_staff", False))
+    client_id = data.get("client_id")
+
+    if not name:
+        return JsonResponse({"success": False, "error": "User Name is required."}, status=400)
+    if not email:
+        return JsonResponse({"success": False, "error": "User Email is required."}, status=400)
+    if not mobile:
+        return JsonResponse({"success": False, "error": "Mobile number is required."}, status=400)
+
+    if User.objects.filter(email=email).exists():
+        return JsonResponse({"success": False, "error": f"Email '{email}' is already registered."}, status=400)
+    if User.objects.filter(mobile=mobile).exists():
+        return JsonResponse({"success": False, "error": f"Mobile '{mobile}' is already registered."}, status=400)
+
+    client_obj = None
+    if client_id:
+        try:
+            client_obj = Client.objects.get(id=client_id)
+        except Exception:
+            client_obj = None
+
+    user = User.objects.create_user(
+        email=email,
+        name=name,
+        mobile=mobile,
+        password=password,
+        is_staff=is_staff,
+        client=client_obj
+    )
+
+    return JsonResponse({
+        "success": True,
+        "message": f"User '{user.email}' created successfully.",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "mobile": user.mobile,
+            "is_staff": user.is_staff,
+            "client_name": client_obj.name if client_obj else None,
+        }
+    })
+
+
+@csrf_exempt
+def api_admin_update_user(request, user_id):
+    """
+    POST /accounts/api/admin/users/<user_id>/update/
+    Updates user details or toggles active / staff status.
+    """
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Only POST method is allowed."}, status=405)
+
+    try:
+        user_obj = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "error": "User not found."}, status=404)
+
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else request.POST
+    except Exception:
+        data = request.POST
+
+    if "name" in data and data["name"].strip():
+        user_obj.name = data["name"].strip()
+    if "mobile" in data and data["mobile"].strip():
+        user_obj.mobile = data["mobile"].strip()
+    if "password" in data and data["password"].strip():
+        user_obj.set_password(data["password"].strip())
+    if "is_active" in data:
+        user_obj.is_active = bool(data["is_active"])
+    if "is_staff" in data:
+        user_obj.is_staff = bool(data["is_staff"])
+    if "client_id" in data:
+        cid = data["client_id"]
+        if cid:
+            try:
+                user_obj.client = Client.objects.get(id=cid)
+            except Exception:
+                user_obj.client = None
+        else:
+            user_obj.client = None
+
+    user_obj.save()
+
+    return JsonResponse({
+        "success": True,
+        "message": f"User '{user_obj.email}' updated successfully."
+    })
+
+
+@csrf_exempt
+def api_admin_delete_user(request, user_id):
+    """
+    POST /accounts/api/admin/users/<user_id>/delete/
+    Deletes a user account.
+    """
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Only POST method is allowed."}, status=405)
+
+    try:
+        user_obj = User.objects.get(id=user_id)
+        email = user_obj.email
+        user_obj.delete()
+        return JsonResponse({"success": True, "message": f"User '{email}' deleted successfully."})
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "error": "User not found."}, status=404)
+
+
+@csrf_exempt
+def api_client_contacts(request):
+    """ GET /accounts/api/contacts/ """
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "error": "Not authenticated"}, status=401)
+    
     if not request.user.client:
         return JsonResponse({"success": False, "error": "User has no associated client"}, status=400)
         
@@ -750,3 +958,29 @@ def api_client_contacts(request):
         return JsonResponse({"success": True, "contacts": list(contacts)})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+
+@csrf_exempt
+def api_change_password(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "error": "Authentication required."}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Only POST allowed."}, status=405)
+    try:
+        data = json.loads(request.body.decode("utf-8")) if request.body else request.POST
+    except Exception:
+        data = request.POST
+
+    new_password = data.get("password", "").strip()
+    if not new_password:
+        return JsonResponse({"success": False, "error": "Password cannot be empty."}, status=400)
+
+    user = request.user
+    user.set_password(new_password)
+    user.first_login = False
+    user.save()
+    
+    from django.contrib.auth import update_session_auth_hash
+    update_session_auth_hash(request, user)
+
+    return JsonResponse({"success": True, "message": "Password changed successfully."})

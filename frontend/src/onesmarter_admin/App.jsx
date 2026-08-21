@@ -55,12 +55,12 @@ function renderAuditDetails(details) {
   return details;
 }
 
-export default function App() {
+export default function App({ user, onLogout }) {
   const isMappingRoute = window.location.pathname.startsWith('/mapping');
   const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentUser, setCurrentUser] = useState(() => {
-    return { name: "Sahil Asarkar", email: "admin@onesmarter.com", role: "Super Admin", client: "ABC Health Client" };
+    return user || { name: "Sahil Asarkar", email: "admin@onesmarter.com", role: "Admin", client: "OneSmarter" };
   });
 
   const [clients, setClients] = useState([]);
@@ -245,11 +245,15 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    await logoutAdmin();
-    localStorage.removeItem('onesmarter_admin_token');
-    localStorage.removeItem('onesmarter_admin_user');
-    setCurrentUser(null);
-    setIsAuthenticated(false);
+    if (onLogout) {
+      await onLogout();
+    } else {
+      await logoutAdmin();
+      localStorage.removeItem('onesmarter_admin_token');
+      localStorage.removeItem('onesmarter_admin_user');
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+    }
   };
 
   const currentClient = clients.find(c => c.id === activeClientId) || clients[0];

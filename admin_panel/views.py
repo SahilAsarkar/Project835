@@ -342,7 +342,7 @@ def api_admin_access_info(request):
             "mobile": u.mobile or "—",
             "role": "Admin" if u.is_staff else "User",
             "access": "Full Access" if u.is_staff else "Standard Access",
-            "clients": [u.client.name] if u.client else ["All Clients"],
+            "clients": ["OneSmarter"] if u.is_staff else ([u.client.name] if u.client else ["None"]),
             "mfa": "2FA TOTP Enabled" if u.totp_enabled else "Password Only",
             "last_login": u.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if u.created_at else "",
             "status": "Active" if u.is_active else "Inactive",
@@ -352,7 +352,7 @@ def api_admin_access_info(request):
         "success": True,
         "current_admin": {
             "name": "Sahil Asarkar",
-            "role": "Super Admin",
+            "role": "Admin",
             "mfa_status": "Enabled",
             "mfa_desc": "Hardware & TOTP Verified",
             "session_state": "Active",
@@ -394,7 +394,7 @@ def api_admin_users(request):
             "is_staff": u.is_staff,
             "totp_enabled": u.totp_enabled,
             "client_id": str(u.client.id) if u.client else None,
-            "client_name": u.client.name if u.client else None,
+            "client_name": "OneSmarter" if u.is_staff else (u.client.name if u.client else None),
             "client_code": u.client.client_code if u.client else None,
             "created_at": u.created_at.strftime("%Y-%m-%d %H:%M:%S") if u.created_at else "",
         })
@@ -447,12 +447,15 @@ def api_admin_create_user(request):
         mobile = f"+1555{count:04d}"
 
     client_obj = None
-    target_cid = client_id or (client_ids[0] if isinstance(client_ids, list) and len(client_ids) > 0 else None)
-    if target_cid:
-        try:
-            client_obj = Client.objects.get(id=target_cid)
-        except Exception:
-            client_obj = None
+    if not is_staff:
+        target_cid = client_id or (client_ids[0] if isinstance(client_ids, list) and len(client_ids) > 0 else None)
+        if target_cid:
+            try:
+                client_obj = Client.objects.get(id=target_cid)
+            except Exception:
+                client_obj = None
+        if not client_obj:
+            return JsonResponse({"success": False, "error": "Client assignment is required for standard Users."}, status=400)
 
     user = User.objects.create_user(
         email=email,
@@ -470,7 +473,7 @@ def api_admin_create_user(request):
         "mobile": user.mobile,
         "is_staff": user.is_staff,
         "role": "Admin" if user.is_staff else "User",
-        "client_name": client_obj.name if client_obj else None,
+        "client_name": "OneSmarter" if user.is_staff else (client_obj.name if client_obj else None),
     }
 
     return JsonResponse({
@@ -499,25 +502,43 @@ def api_admin_update_user(request, user_id):
     except Exception:
         data = request.POST
 
+    if "email" in data and data["email"].strip().lower():
+        email = data["email"].strip().lower()
+        if email != user_obj.email:
+            if User.objects.filter(email=email).exists():
+                return JsonResponse({"success": False, "error": f"Email '{email}' is already registered in the system."}, status=400)
+            user_obj.email = email
+
     if "name" in data and data["name"].strip():
         user_obj.name = data["name"].strip()
+
     if "mobile" in data and data["mobile"].strip():
-        user_obj.mobile = data["mobile"].strip()
+        mobile = data["mobile"].strip()
+        if mobile != user_obj.mobile:
+            if User.objects.filter(mobile=mobile).exists():
+                return JsonResponse({"success": False, "error": f"Mobile '{mobile}' is already registered in the system."}, status=400)
+            user_obj.mobile = mobile
+
     if "password" in data and data["password"].strip():
         user_obj.set_password(data["password"].strip())
     if "is_active" in data:
         user_obj.is_active = bool(data["is_active"])
     if "is_staff" in data:
         user_obj.is_staff = bool(data["is_staff"])
-    if "client_id" in data:
-        cid = data["client_id"]
-        if cid:
+        if user_obj.is_staff:
+            user_obj.client = None
+
+    if not user_obj.is_staff:
+        if "client_id" in data:
+            cid = data["client_id"]
+            if not cid:
+                return JsonResponse({"success": False, "error": "Client assignment is required for standard Users."}, status=400)
             try:
                 user_obj.client = Client.objects.get(id=cid)
             except Exception:
-                user_obj.client = None
-        else:
-            user_obj.client = None
+                return JsonResponse({"success": False, "error": "Invalid client assigned."}, status=400)
+        elif not user_obj.client:
+            return JsonResponse({"success": False, "error": "Client assignment is required for standard Users."}, status=400)
 
     user_obj.save()
 
@@ -984,18 +1005,26 @@ def api_admin_client_documents(request, client_id):
     if request.method != "GET":
         return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
     
-    docs = ClientDocument.objects.filter(client_id=client_id)
+    docs = ClientDocument.objects.filter(client_id=client_id).order_by('-created_at')
+    seen_keys = set()
     doc_list = []
     for d in docs:
-        doc_list.append({
-            "id": str(d.id),
-            "document_name": d.document_name,
-            "original_filename": d.original_filename,
-            "document_type": d.document_type,
-            "file_size": d.file_size,
-            "uploaded_by": d.uploaded_by,
-            "created_at": d.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if d.created_at else ""
-        })
+        if d.document_type == 'General Document':
+            key = f"general_{d.document_name}"
+        else:
+            key = d.document_type
+            
+        if key not in seen_keys:
+            seen_keys.add(key)
+            doc_list.append({
+                "id": str(d.id),
+                "document_name": d.document_name,
+                "original_filename": d.original_filename,
+                "document_type": d.document_type,
+                "file_size": d.file_size,
+                "uploaded_by": d.uploaded_by,
+                "created_at": d.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if d.created_at else ""
+            })
     return JsonResponse({"success": True, "documents": doc_list})
 
 

@@ -1,13 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAccessInfo, fetchClients, createUser } from '../services/api';
+import { fetchAccessInfo, fetchClients, createUser, updateUser, deleteUser } from '../services/api';
 import CreateUserModal from './modals/CreateUserModal';
+import EditUserModal from './modals/EditUserModal';
+import UserDetailsModal from './modals/UserDetailsModal';
 
 export default function AccessView({ currentUser }) {
   const [accessData, setAccessData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  
+  const [selectedUser, setSelectedUser] = useState(null);
   const [clients, setClients] = useState([]);
+  
+  // Sorting state
+  const [sortField, setSortField] = useState('person');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     loadAccess();
@@ -38,11 +50,85 @@ export default function AccessView({ currentUser }) {
   }
 
   const handleCreateUser = async (userData) => {
-    // The try/catch is removed because CreateUserModal handles the error display.
-    // If createUser throws, the modal catches it and shows it in the red banner.
     await createUser(userData);
     setShowCreateModal(false);
-    loadAccess(); // Reload the access matrix
+    loadAccess();
+  };
+
+  const handleEditUser = async (userId, updatedData) => {
+    await updateUser(userId, updatedData);
+    setShowEditModal(false);
+    loadAccess();
+  };
+
+  const handleDeleteUser = async (member) => {
+    const isCurrentUser = member.email === currentUser?.email;
+    const confirmMsg = isCurrentUser
+      ? `WARNING: You are about to delete your own administrative account (${member.email}). Are you sure you want to proceed?`
+      : `Are you sure you want to delete the ${member.role.toLowerCase()} account (${member.email})?`;
+      
+    if (window.confirm(confirmMsg)) {
+      try {
+        setLoading(true);
+        await deleteUser(member.id);
+        loadAccess();
+      } catch (err) {
+        setErrorMessage(err.message || 'Failed to delete user.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortIcon = (field) => {
+    if (sortField !== field) return <span style={{ marginLeft: '4px', opacity: 0.3, fontSize: '10px' }}>⇅</span>;
+    return sortDirection === 'asc' 
+      ? <span style={{ marginLeft: '4px', color: 'var(--teal)', fontSize: '10px' }}>▲</span>
+      : <span style={{ marginLeft: '4px', color: 'var(--teal)', fontSize: '10px' }}>▼</span>;
+  };
+
+  const getSortedMembers = () => {
+    if (!accessData || !accessData.staff) return [];
+    const members = [...accessData.staff];
+    if (!sortField) return members;
+
+    return members.sort((a, b) => {
+      let valA = '';
+      let valB = '';
+
+      if (sortField === 'person') {
+        valA = a.person || '';
+        valB = b.person || '';
+      } else if (sortField === 'email') {
+        valA = a.email || '';
+        valB = b.email || '';
+      } else if (sortField === 'role') {
+        valA = a.role || '';
+        valB = b.role || '';
+      } else if (sortField === 'mobile') {
+        valA = a.mobile || '';
+        valB = b.mobile || '';
+      } else if (sortField === 'client') {
+        valA = (a.clients && a.clients[0]) || '';
+        valB = (b.clients && b.clients[0]) || '';
+      }
+
+      valA = valA.toString().toLowerCase();
+      valB = valB.toString().toLowerCase();
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
   };
 
   function formatDate(isoStr) {
@@ -60,6 +146,8 @@ export default function AccessView({ currentUser }) {
       return isoStr;
     }
   }
+
+  const sortedMembers = getSortedMembers();
 
   return (
     <section className="view on" id="v-access">
@@ -114,25 +202,44 @@ export default function AccessView({ currentUser }) {
       ) : (
         <>
           <h2 className="sec">Administrative Staff Access</h2>
-          <table style={{ width: '100%', tableLayout: 'fixed' }}>
+          <table style={{ width: '100%' }}>
             <thead>
               <tr>
-                <th>Person</th>
-                <th>Role</th>
-                <th>Access Level</th>
-                <th>Mobile</th>
-                <th>Assigned Clients</th>
+                <th onClick={() => handleSort('person')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Person {renderSortIcon('person')}
+                </th>
+                <th onClick={() => handleSort('email')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Email {renderSortIcon('email')}
+                </th>
+                <th onClick={() => handleSort('role')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Role {renderSortIcon('role')}
+                </th>
+                <th onClick={() => handleSort('mobile')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Mobile {renderSortIcon('mobile')}
+                </th>
+                <th onClick={() => handleSort('client')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Client {renderSortIcon('client')}
+                </th>
                 <th>MFA Status</th>
                 <th>Last Login</th>
                 <th>Status</th>
+                <th style={{ textAlign: 'center', width: '80px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {(accessData?.staff || []).map((member, idx) => (
-                <tr key={idx}>
-                  <td><b>{member.person}</b></td>
+              {sortedMembers.map((member, idx) => (
+                <tr key={member.id || idx}>
+                  <td>
+                    <b 
+                      style={{ cursor: 'pointer', color: 'var(--teal)', textDecoration: 'underline' }} 
+                      onClick={() => { setSelectedUser(member); setShowDetailsModal(true); }}
+                      title="View user details"
+                    >
+                      {member.person}
+                    </b>
+                  </td>
+                  <td><span style={{ fontSize: '12.5px', fontFamily: 'monospace' }}>{member.email}</span></td>
                   <td>{member.role}</td>
-                  <td><span className="tag ok">{member.access}</span></td>
                   <td>{member.mobile || '—'}</td>
                   <td>
                     {(member.clients || []).length > 0 
@@ -142,6 +249,26 @@ export default function AccessView({ currentUser }) {
                   <td><span className="tag ok">{member.mfa}</span></td>
                   <td className="num">{formatDate(member.last_login)}</td>
                   <td><span className="tag ok">{member.status}</span></td>
+                  <td style={{ textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <button 
+                        className="btn icon-btn" 
+                        title="Edit Account"
+                        onClick={() => {
+                          setSelectedUser({
+                            ...member,
+                            client_id: clients.find(c => c.name === member.clients?.[0])?.id || ''
+                          });
+                          setShowEditModal(true);
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+                      >
+                        <svg width="15" height="15" fill="var(--teal)" viewBox="0 0 16 16">
+                          <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -154,6 +281,21 @@ export default function AccessView({ currentUser }) {
         onClose={() => setShowCreateModal(false)}
         onSave={handleCreateUser}
         clients={clients}
+      />
+
+      <EditUserModal
+        isOpen={showEditModal}
+        onClose={() => { setShowEditModal(false); setSelectedUser(null); }}
+        onSave={handleEditUser}
+        onDelete={handleDeleteUser}
+        clients={clients}
+        user={selectedUser}
+      />
+
+      <UserDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => { setShowDetailsModal(false); setSelectedUser(null); }}
+        user={selectedUser}
       />
     </section>
   );

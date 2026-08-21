@@ -9,6 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import TotpSetupPage from "./pages/TotpSetupPage";
 import TotpVerifyPage from "./pages/TotpVerifyPage";
+import FirstLoginPasswordPage from "./pages/FirstLoginPasswordPage";
 
 import FlowView from "./pages/FlowView";
 import ConversionsView from "./pages/ConversionsView";
@@ -142,10 +143,37 @@ export default function App() {
     );
   }
 
-  const user = (userState && userState.user) || { name: "User", email: "user@example.com" };
+  if (!userState || !userState.authenticated) {
+    return <LoginPage onLoginSuccess={checkUserStatus} />;
+  }
+
+  if (userState.authenticated) {
+    if (!userState.user.totp_enabled) {
+      return <TotpSetupPage onSetupSuccess={checkUserStatus} onGoDashboard={checkUserStatus} />;
+    }
+    if (!userState.user.totp_verified) {
+      return <TotpVerifyPage onVerifySuccess={checkUserStatus} />;
+    }
+    if (userState.user.first_login) {
+      return <FirstLoginPasswordPage onPasswordChangeSuccess={checkUserStatus} />;
+    }
+  }
+
+  const user = userState.user;
 
   // Standalone Admin Route View (/administrator or /adminstrator)
   if (isAdminRoute) {
+    if (!user.is_staff) {
+      return (
+        <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", fontFamily: "var(--body)", color: "var(--brick)", padding: "20px", textAlign: "center" }}>
+          <div>
+            <h2 style={{ marginBottom: "12px" }}>Access Denied</h2>
+            <p style={{ color: "var(--ink-2)" }}>Standard users are not authorized to access administrative panels.</p>
+            <button className="btn primary" onClick={() => { window.location.href = "/"; }} style={{ marginTop: "16px", padding: "8px 16px" }}>Go to Dashboard</button>
+          </div>
+        </div>
+      );
+    }
     return <AdminView user={user} onLogout={handleLogout} />;
   }
 

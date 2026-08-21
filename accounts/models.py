@@ -90,6 +90,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    first_login = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -130,6 +131,7 @@ class EmployeeRole(models.Model):
 
     def __str__(self):
         return self.role_name
+
 
 class ClientStepComment(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
