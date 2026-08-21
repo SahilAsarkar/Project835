@@ -48,7 +48,7 @@ export default function FileViewerModal({ isOpen, onClose, fileData, stepTitle, 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--line-soft)', paddingBottom: '12px', marginBottom: '14px' }}>
           <div>
             <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>👁</span> Uploaded Evidence Preview · Step {stepNum}
+              <span>👁</span> Uploaded Evidence Preview{stepNum ? ` · Step ${stepNum}` : ''}
             </div>
             <div className="modal-t" style={{ fontSize: '15px', marginTop: '3px' }}>
               {fileData.filename}
@@ -68,11 +68,17 @@ export default function FileViewerModal({ isOpen, onClose, fileData, stepTitle, 
 
         <div style={{ flex: 1, minHeight: '350px', maxHeight: '65vh', overflow: 'auto', background: '#F8FAFC', border: '1px solid var(--line-soft)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {isPdf ? (
-            <iframe
-              src={fileData.fileUrl}
-              title={fileData.filename}
+            <object
+              data={fileData.fileUrl}
+              type="application/pdf"
               style={{ width: '100%', height: '62vh', border: 'none', background: '#fff' }}
-            />
+            >
+              <iframe
+                src={fileData.fileUrl}
+                title={fileData.filename}
+                style={{ width: '100%', height: '62vh', border: 'none', background: '#fff' }}
+              />
+            </object>
           ) : isImage ? (
             <div style={{ padding: '16px', textAlign: 'center' }}>
               <img

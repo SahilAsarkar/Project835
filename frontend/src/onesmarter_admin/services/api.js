@@ -148,9 +148,17 @@ export async function fetchStepUploadFile(clientId, stepKey) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Failed to load uploaded file');
   }
-  const contentType = res.headers.get('Content-Type') || '';
   const filename = res.headers.get('X-OneSmarter-Filename') || 'evidence_file';
-  const blob = await res.blob();
+  let contentType = res.headers.get('Content-Type') || '';
+  if (!contentType || contentType === 'application/octet-stream') {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') contentType = 'application/pdf';
+    else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    else if (['txt', 'log', 'csv', 'json', 'xml', 'edi', '835', 'x12'].includes(ext)) contentType = 'text/plain';
+    else contentType = 'application/pdf';
+  }
+  const rawBlob = await res.blob();
+  const blob = new Blob([rawBlob], { type: contentType });
   const fileUrl = URL.createObjectURL(blob);
   return { fileUrl, contentType, filename, blob };
 }
@@ -285,8 +293,16 @@ export async function fetchDocumentFile(docId, defaultFilename = 'document.pdf')
   });
   if (!res.ok) throw new Error('Document download failed');
   const filename = res.headers.get('X-OneSmarter-Filename') || defaultFilename;
-  const contentType = res.headers.get('Content-Type') || (filename.endsWith('.pdf') ? 'application/pdf' : 'text/plain');
-  const blob = await res.blob();
+  let contentType = res.headers.get('Content-Type') || '';
+  if (!contentType || contentType === 'application/octet-stream') {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') contentType = 'application/pdf';
+    else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    else if (['txt', 'log', 'csv', 'json', 'xml', 'edi', '835', 'x12'].includes(ext)) contentType = 'text/plain';
+    else contentType = 'application/pdf';
+  }
+  const rawBlob = await res.blob();
+  const blob = new Blob([rawBlob], { type: contentType });
   const fileUrl = URL.createObjectURL(blob);
   return { fileUrl, contentType, filename, blob };
 }
