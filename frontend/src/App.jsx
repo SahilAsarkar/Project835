@@ -15,6 +15,7 @@ import ConversionsView from "./pages/ConversionsView";
 import NoticesView from "./pages/NoticesView";
 import ArchiveView from "./pages/ArchiveView";
 import ConnectionsView from "./pages/ConnectionsView";
+import ContactsView from "./pages/ContactsView";
 import AdminView from "./pages/AdminView";
 
 export default function App() {
@@ -198,6 +199,8 @@ export default function App() {
               onOpenSftpBrowser={(params) => setSftpBrowserState(params)}
             />
           )}
+          
+          {activeTab === "contacts" && <ContactsView />}
         </main>
       </div>
 

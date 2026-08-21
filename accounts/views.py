@@ -733,4 +733,20 @@ def api_admin_delete_user(request, user_id):
         return JsonResponse({"success": False, "error": "User not found."}, status=404)
 
 
-
+@csrf_exempt
+def api_client_contacts(request):
+    """ GET /accounts/api/contacts/ """
+    if not request.user.is_authenticated:
+        return JsonResponse({"success": False, "error": "Not authenticated"}, status=401)
+    
+    if not request.user.client:
+        return JsonResponse({"success": False, "error": "User has no associated client"}, status=400)
+        
+    try:
+        from accounts.models import ClientContact
+        contacts = ClientContact.objects.filter(client=request.user.client).order_by('-created_at').values(
+            "id", "role_name", "name", "email", "phone", "created_at"
+        )
+        return JsonResponse({"success": True, "contacts": list(contacts)})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)

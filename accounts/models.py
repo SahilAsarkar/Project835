@@ -100,3 +100,33 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+
+class ClientContact(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="contacts")
+    role_name = models.CharField(max_length=100)
+    name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "client_contact"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.name} - {self.role_name} ({self.client.name})"
+
+
+class EmployeeRole(models.Model):
+    role_name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "employee_role"
+        ordering = ["role_name"]
+
+    def __str__(self):
+        return self.role_name

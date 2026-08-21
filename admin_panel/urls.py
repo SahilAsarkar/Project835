@@ -32,6 +32,7 @@ from .views import (
     api_admin_golive_step6_complete,
     api_admin_golive_step_redo,
     api_admin_test_environment_run,
+    api_admin_employee_roles,
 )
 
 urlpatterns = [
@@ -73,4 +74,5 @@ urlpatterns = [
     path("api/access/info", api_admin_access_info),
     path("api/stats/", api_admin_stats, name="admin_api_stats"),
     path("api/stats", api_admin_stats),
+    path("api/employee-roles/", api_admin_employee_roles, name="admin_api_employee_roles"),
 ]

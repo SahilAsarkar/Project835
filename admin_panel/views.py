@@ -618,6 +618,12 @@ def api_admin_client_state(request, client_id):
             
         is_file_step = step.step_number in [1, 2, 3]
 
+        extra_data = {}
+        if step.step_number == 4:
+            from accounts.models import ClientContact
+            contacts = ClientContact.objects.filter(client=client_obj).values("id", "role_name", "name", "email", "phone")
+            extra_data["contacts"] = list(contacts)
+            
         steps_data.append({
             "id": step.step_number,
             "key": f"step_{step.step_number}_{step.title.lower().replace(' ', '_')[:20]}",
@@ -629,7 +635,7 @@ def api_admin_client_state(request, client_id):
             "actionType": action_types.get(step.step_number, "standard"),
             "file": is_file_step,
             "ext": "pdf" if is_file_step else None,
-            "extra": {},
+            "extra": extra_data,
             "latestUpload": None,
             "latestNote": None
         })
@@ -796,6 +802,22 @@ def api_admin_step_action(request, client_id, step_key, action):
         if len(parts) >= 2:
             step_num = int(parts[1])
             client_obj = Client.objects.get(id=client_id)
+            
+            if action == "save" and step_num == 4:
+                import json
+                from accounts.models import ClientContact
+                try:
+                    data = json.loads(request.body.decode('utf-8'))
+                    ClientContact.objects.create(
+                        client=client_obj,
+                        role_name=data.get('role_name', ''),
+                        name=data.get('employee_name', ''),
+                        email=data.get('email', ''),
+                        phone=data.get('phone', '')
+                    )
+                except Exception as e:
+                    pass
+
             step_def = OnboardingStepDefinition.objects.get(step_number=step_num)
             step_status, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step_def)
             step_status.status = 'COMPLETED'
@@ -1238,3 +1260,30 @@ def api_admin_test_environment_run(request, client_id):
     """ POST /admin-panel/api/clients/<client_id>/test-environment/run-test/ """
     return JsonResponse({"success": True, "message": "Sandbox test passed successfully."})
 
+
+@csrf_exempt
+def api_admin_employee_roles(request):
+    """
+    GET, POST /admin-panel/api/employee-roles/
+    Manage employee roles for dropdowns.
+    """
+    from accounts.models import EmployeeRole
+
+    if request.method == "GET":
+        roles = EmployeeRole.objects.all().order_by("role_name").values("id", "role_name", "description")
+        return JsonResponse({"success": True, "roles": list(roles)})
+
+    elif request.method == "POST":
+        try:
+            import json
+            data = json.loads(request.body.decode("utf-8")) if request.body else request.POST
+            role_name = data.get("role_name", "").strip()
+            description = data.get("description", "").strip()
+            if not role_name:
+                return JsonResponse({"success": False, "error": "Role name is required"}, status=400)
+            role = EmployeeRole.objects.create(role_name=role_name, description=description)
+            return JsonResponse({"success": True, "roles": [{"id": role.id, "role_name": role.role_name, "description": role.description}]})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)

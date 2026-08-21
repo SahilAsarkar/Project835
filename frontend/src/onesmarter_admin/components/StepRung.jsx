@@ -53,7 +53,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
   const [validating835, setValidating835] = useState(false);
 
   const [s4Name, setS4Name] = useState('');
-  const [s4Role, setS4Role] = useState(roles[0]?.role_name || 'Named Contact');
+  const [s4Role, setS4Role] = useState('Technical Contact');
   const [s4Email, setS4Email] = useState('');
   const [s4CountryCode, setS4CountryCode] = useState('+1');
   const [s4Phone, setS4Phone] = useState('');
@@ -414,43 +414,67 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
             {step.actionType === 'contact_manager' && (
               <div className="step-custom-box" style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)', marginTop: '10px' }}>
                 {step.extra?.contacts && step.extra.contacts.length > 0 && (
-                  <div style={{ marginBottom: '10px', fontSize: '12px', background: '#fff', border: '1px solid var(--line-soft)', borderRadius: '3px', padding: '8px 12px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--ink-2)', marginBottom: '6px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ marginBottom: '16px', background: '#fff', border: '1px solid var(--line-soft)', borderRadius: '4px', padding: '12px 16px' }}>
+                    <div style={{ fontWeight: 700, color: '#475569', marginBottom: '12px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span>Recorded Contacts ({step.extra.contacts.length})</span>
                       {step.extra.contacts.length > 2 && (
                         <button
                           type="button"
-                          className="btn tiny"
-                          style={{ padding: '2px 8px', fontSize: '10.5px', color: 'var(--blue)' }}
+                          style={{ background: '#fff', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '4px 8px', fontSize: '11px', color: '#334155', cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}
                           onClick={() => setShowAllContacts(!showAllContacts)}
                         >
                           {showAllContacts ? '▲ Show Less' : `▼ Show More (${step.extra.contacts.length - 2} more)`}
                         </button>
                       )}
                     </div>
-                    {(showAllContacts ? step.extra.contacts : step.extra.contacts.slice(0, 2)).map((c, idx) => (
-                      <div key={c.id || idx} style={{ padding: '4px 0', borderBottom: idx < (showAllContacts ? step.extra.contacts.length : Math.min(2, step.extra.contacts.length)) - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          👤 <b>{c.employee_name || c.name}</b> <span className="tag idle" style={{ marginLeft: '6px', fontSize: '10px' }}>{c.role_name}</span>
-                          <span style={{ color: 'var(--ink-2)', fontSize: '11.5px', marginLeft: '10px' }}>
-                            {c.email && <span>✉ {c.email} </span>}
-                            {c.phone && <span>· ☎ {c.phone} </span>}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {(showAllContacts ? step.extra.contacts : step.extra.contacts.slice(0, 2)).map((c, idx) => (
+                        <div key={c.id || idx} style={{ padding: '10px 0', borderBottom: idx < (showAllContacts ? step.extra.contacts.length : Math.min(2, step.extra.contacts.length)) - 1 ? '1px solid #F1F5F9' : 'none', display: 'flex', alignItems: 'center', fontSize: '13px', color: '#1E293B' }}>
+                          <svg width="14" height="14" fill="#334155" viewBox="0 0 16 16" style={{ marginRight: '8px', flexShrink: 0 }}>
+                            <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                          </svg>
+                          <span style={{ fontWeight: 600 }}>{c.employee_name || c.name}</span>
+                          <span style={{ marginLeft: '12px', padding: '3px 8px', background: '#E2E8F0', color: '#64748B', fontSize: '10px', borderRadius: '3px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                            {c.role_name}
                           </span>
+                          <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center', color: '#64748B', fontSize: '13px', gap: '8px' }}>
+                            {c.email && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg>
+                                {c.email}
+                              </span>
+                            )}
+                            {c.email && c.phone && <span>·</span>}
+                            {c.phone && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.062a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328z"/></svg>
+                                {c.phone}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-start' }}>
-                  <div style={{ flex: '1 1 140px', minWidth: '140px' }}>
+                  <div style={{ flex: '1 1 200px', minWidth: '200px' }}>
                     <div style={{ display: 'flex', gap: '3px' }}>
                       <select 
                         style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: 'var(--surface)', color: 'var(--ink)' }}
                         value={s4Role}
                         onChange={(e) => setS4Role(e.target.value)}
                       >
-                        {roles.map((r) => <option key={r.id} value={r.role_name}>{r.role_name}</option>)}
+                        <option value="Technical Contact">Technical Contact</option>
+                        <option value="Billing Contact">Billing Contact</option>
+                        <option value="Administrative Contact">Administrative Contact</option>
+                        <option value="Project Sponsor">Project Sponsor</option>
+                        {roles.map((r) => {
+                          const val = r.role_name || r.name;
+                          if (['Technical Contact', 'Billing Contact', 'Administrative Contact', 'Project Sponsor'].includes(val)) return null;
+                          return <option key={r.id || val} value={val}>{val}</option>;
+                        })}
                       </select>
                       <button type="button" className="btn tiny icon-btn" onClick={onOpenAddRole} title="Add New Role" style={{ minWidth: '26px', height: '28px' }}>+</button>
                     </div>
