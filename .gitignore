@@ -22,4 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-media/
+Thumbs.db
+
+# Database
+*.sqlite3
+*.db
+db.sqlite3
+

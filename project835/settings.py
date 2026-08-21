@@ -182,3 +182,9 @@ CSRF_COOKIE_SAMESITE = "Lax"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+
+# ============================================================
+# SAMPLE DOCUMENTS CONFIGURATION
+# ============================================================
+
+SAMPLE_DOCUMENTS_DIR = BASE_DIR / "sample_docs"
