@@ -163,7 +163,7 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
       showToast('Saved — Mapping complete! Returning to onboarding...');
       
       setTimeout(() => {
-        window.location.href = targetClientId ? `/?client=${encodeURIComponent(targetClientId)}&nav=onboard&step=8#step-8` : '/?nav=onboard';
+        window.location.href = targetClientId ? `/administrator?client=${encodeURIComponent(targetClientId)}&nav=onboard&step=8#step-8` : '/administrator?nav=onboard';
       }, 600);
     } catch(err) {
       setMappingFeedback({ isOpen: true, kind: 'bad', title: 'Save Failed', content: 'Could not save mappings: ' + err.message });
@@ -283,44 +283,44 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
       <div className="shell">
         <nav className="rail">
           <div className="grp eyebrow">Clients</div>
-          <button className="navitem" onClick={() => window.location.href = '/?nav=clients'}>
+          <button className="navitem" onClick={() => window.location.href = '/administrator?nav=clients'}>
             <span>All Clients</span>
             {clients.length > 0 && <span className="count">{clients.length}</span>}
           </button>
-          <button className="navitem on" onClick={() => window.location.href = targetClientId ? `/?client=${encodeURIComponent(targetClientId)}` : '/'}>
+          <button className="navitem on" onClick={() => window.location.href = targetClientId ? `/administrator?client=${encodeURIComponent(targetClientId)}` : '/administrator'}>
             <span>Onboarding</span>
           </button>
-          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/?client=${encodeURIComponent(targetClientId)}&nav=docs` : '/?nav=docs'}>
+          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/administrator?client=${encodeURIComponent(targetClientId)}&nav=docs` : '/administrator?nav=docs'}>
             <span>Documents</span>
           </button>
-          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/?client=${encodeURIComponent(targetClientId)}&nav=files` : '/?nav=files'}>
+          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/administrator?client=${encodeURIComponent(targetClientId)}&nav=files` : '/administrator?nav=files'}>
             <span>Files</span>
           </button>
 
           <div className="grp eyebrow" style={{ paddingTop: '18px' }}>Pre-Production</div>
-          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/?client=${encodeURIComponent(targetClientId)}&nav=sandbox` : '/?nav=sandbox'}>
+          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/administrator?client=${encodeURIComponent(targetClientId)}&nav=sandbox` : '/administrator?nav=sandbox'}>
             <span>Test Environment</span>
           </button>
-          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/?client=${encodeURIComponent(targetClientId)}&nav=promote` : '/?nav=promote'}>
+          <button className="navitem" onClick={() => window.location.href = targetClientId ? `/administrator?client=${encodeURIComponent(targetClientId)}&nav=promote` : '/administrator?nav=promote'}>
             <span>Go Live</span>
           </button>
 
           <div className="grp eyebrow" style={{ paddingTop: '18px' }}>Governance</div>
-          <button className="navitem" onClick={() => window.location.href = '/?nav=trust'}>
+          <button className="navitem" onClick={() => window.location.href = '/administrator?nav=trust'}>
             <span>Trust Center</span>
           </button>
-          <button className="navitem" onClick={() => window.location.href = '/?nav=access'}>
+          <button className="navitem" onClick={() => window.location.href = '/administrator?nav=access'}>
             <span>Access</span>
           </button>
-          <button className="navitem" onClick={() => window.location.href = '/?nav=audit'}>
+          <button className="navitem" onClick={() => window.location.href = '/administrator?nav=audit'}>
             <span>Audit Log</span>
           </button>
 
           <div className="grp eyebrow" style={{ paddingTop: '18px' }}>Operations</div>
-          <button className="navitem" onClick={() => window.location.href = '/?nav=ops'}>
+          <button className="navitem" onClick={() => window.location.href = '/administrator?nav=ops'}>
             <span>Operations</span>
           </button>
-          <button className="navitem" onClick={() => window.location.href = '/?nav=offboard'}>
+          <button className="navitem" onClick={() => window.location.href = '/administrator?nav=offboard'}>
             <span>Offboarding</span>
           </button>
         </nav>
