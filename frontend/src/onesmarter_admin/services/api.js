@@ -264,6 +264,15 @@ export async function fetchClientDocuments(clientId) {
   return data.documents || [];
 }
 
+export async function fetchClientEdiFiles(clientId) {
+  const res = await fetch(`${BASE_URL}/clients/${encodeURIComponent(clientId)}/edi-files/`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to fetch client EDI 835 archive files');
+  const data = await res.json();
+  return data.files || [];
+}
+
 export async function uploadClientDocument(clientId, file, docName = '', docType = 'General Document') {
   const res = await fetch(`${BASE_URL}/clients/${encodeURIComponent(clientId)}/documents/upload/`, {
     method: 'POST',

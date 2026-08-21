@@ -21,6 +21,7 @@ from .views import (
     api_admin_client_documents_upload,
     api_admin_document_download,
     api_admin_document_delete,
+    api_admin_client_edi_files,
 )
 
 urlpatterns = [
@@ -39,6 +40,7 @@ urlpatterns = [
     path("api/clients/<uuid:client_id>/documents/upload/", api_admin_client_documents_upload),
     path("api/documents/<uuid:doc_id>/download/", api_admin_document_download),
     path("api/documents/<uuid:doc_id>/", api_admin_document_delete),
+    path("api/clients/<uuid:client_id>/edi-files/", api_admin_client_edi_files),
     path("api/clients/<uuid:client_id>/steps/step_7_835_val/validate-uploaded/", api_admin_step_validate_835),
     path("api/clients/<uuid:client_id>/steps/<str:step_key>/<str:action>/", api_admin_step_action),
     path("api/users/", api_admin_users, name="admin_api_users"),

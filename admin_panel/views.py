@@ -888,3 +888,29 @@ def api_admin_document_delete(request, doc_id):
         return JsonResponse({"success": True, "message": "Document deleted successfully"})
     except ClientDocument.DoesNotExist:
         return JsonResponse({"success": False, "error": "Document not found"}, status=404)
+
+
+from edi835.models import EDI835File
+
+@csrf_exempt
+def api_admin_client_edi_files(request, client_id):
+    """ GET /admin-panel/api/clients/<client_id>/edi-files/ """
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
+    
+    files = EDI835File.objects.filter(client_id=client_id).order_by('-uploaded_at')
+    file_list = []
+    for f in files:
+        file_list.append({
+            "id": str(f.id),
+            "original_filename": f.original_filename,
+            "status": f.status,
+            "claims_count": f.claims_count,
+            "services_count": f.services_count,
+            "records_count": f.records_count,
+            "ingestion_source": f.ingestion_source,
+            "uploaded_at": f.uploaded_at.strftime("%Y-%m-%dT%H:%M:%SZ") if f.uploaded_at else "",
+            "processing_completed_at": f.processing_completed_at.strftime("%Y-%m-%dT%H:%M:%SZ") if f.processing_completed_at else "",
+            "error_message": f.error_message
+        })
+    return JsonResponse({"success": True, "files": file_list})
