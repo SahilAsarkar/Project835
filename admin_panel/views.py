@@ -843,12 +843,25 @@ def api_admin_step_action(request, client_id, step_key, action):
         if len(parts) >= 2:
             step_num = int(parts[1])
             client_obj = Client.objects.get(id=client_id)
-            # Validate Step 4 Contact fields and save contact
+            
+            if action == "save" and step_num == 4:
+                import json
+                from accounts.models import ClientContact
+                try:
+                    data = json.loads(request.body.decode('utf-8'))
+                    ClientContact.objects.create(
+                        client=client_obj,
+                        role_name=data.get('role_name', ''),
+                        name=data.get('employee_name', ''),
+                        email=data.get('email', ''),
+                        phone=data.get('phone', '')
+                    )
+                except Exception as e:
+                    pass
+
+            # Validate Step 4 Contact fields (from other branch)
             if action == "save" and step_num == 4:
                 try:
-                    import json
-                    from accounts.models import ClientContact
-                    
                     body = json.loads(request.body.decode('utf-8'))
                     email = body.get("email", "")
                     phone = body.get("phone", "")
@@ -862,14 +875,6 @@ def api_admin_step_action(request, client_id, step_key, action):
                         ok_phone, err_phone = validate_phone_number(phone)
                         if not ok_phone:
                             return JsonResponse({"success": False, "error": err_phone}, status=400)
-                            
-                    ClientContact.objects.create(
-                        client=client_obj,
-                        role_name=body.get('role_name', ''),
-                        name=body.get('employee_name', ''),
-                        email=email,
-                        phone=phone
-                    )
                 except Exception:
                     pass
 
