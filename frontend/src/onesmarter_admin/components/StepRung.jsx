@@ -60,6 +60,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
   const [s4CountryCode, setS4CountryCode] = useState('+1');
   const [s4Phone, setS4Phone] = useState('');
   const [showAllContacts, setShowAllContacts] = useState(false);
+  const [showAllUsers, setShowAllUsers] = useState(false);
   const [s4Touched, setS4Touched] = useState({ name: false, email: false, phone: false });
   const [s4SubmitError, setS4SubmitError] = useState('');
 
@@ -327,6 +328,10 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
       });
       await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_9_sftp/complete/`, {});
       setFeedback({ isOpen: true, kind: 'ok', title: 'User Created', content: `Successfully created user ${s9Email} and linked to ${clientId}. Step 9 completed.`, checks: [] });
+      setS9Name('');
+      setS9Email('');
+      setS9Password('');
+      setS9Mobile('');
       await onRefresh();
     } catch (err) {
       setFeedback({ isOpen: true, kind: 'bad', title: 'Creation Error', content: err.message, checks: [] });
@@ -765,6 +770,50 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
 
             {step.actionType === 'sftp_redirect' && (
               <div className="step-custom-box" style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                {step.extra?.users && step.extra.users.length > 0 && (
+                  <div style={{ marginBottom: '16px', background: '#fff', border: '1px solid var(--line-soft)', borderRadius: '4px', padding: '12px 16px' }}>
+                    <div style={{ fontWeight: 700, color: '#475569', marginBottom: '12px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Recorded Users ({step.extra.users.length})</span>
+                      {step.extra.users.length > 2 && (
+                        <button
+                          type="button"
+                          style={{ background: '#fff', border: '1px solid #CBD5E1', borderRadius: '3px', padding: '4px 8px', fontSize: '11px', color: '#334155', cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}
+                          onClick={() => setShowAllUsers(!showAllUsers)}
+                        >
+                          {showAllUsers ? '▲ Show Less' : `▼ Show More (${step.extra.users.length - 2} more)`}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {(showAllUsers ? step.extra.users : step.extra.users.slice(0, 2)).map((u, idx) => (
+                        <div key={u.id || idx} style={{ padding: '10px 0', borderBottom: idx < (showAllUsers ? step.extra.users.length : Math.min(2, step.extra.users.length)) - 1 ? '1px solid #F1F5F9' : 'none', display: 'flex', alignItems: 'center', fontSize: '13px', color: '#1E293B' }}>
+                          <svg width="14" height="14" fill="#334155" viewBox="0 0 16 16" style={{ marginRight: '8px', flexShrink: 0 }}>
+                            <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                          </svg>
+                          <span style={{ fontWeight: 600 }}>{u.name}</span>
+                          <span style={{ marginLeft: '12px', padding: '3px 8px', background: '#E2E8F0', color: '#64748B', fontSize: '10px', borderRadius: '3px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                            {u.role}
+                          </span>
+                          <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center', color: '#64748B', fontSize: '13px', gap: '8px' }}>
+                            {u.email && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg>
+                                {u.email}
+                              </span>
+                            )}
+                            {u.email && u.mobile && <span>·</span>}
+                            {u.mobile && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.062a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328z"/></svg>
+                                {u.mobile}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Create User:
                 </div>
@@ -811,7 +860,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                       onClick={handleStep9CreateUser}
                       style={{ padding: '6px 14px', fontWeight: 600, height: '29px' }}
                     >
-                      ✓ Create User & Complete
+                      ✓ {step.extra?.users && step.extra.users.length > 0 ? 'Create Additional User' : 'Create User & Complete'}
                     </button>
                   </div>
                 </div>
@@ -819,19 +868,19 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
             )}
 
             {step.actionType === 'side_by_side_done' && (
-              <div className="step-custom-box">
-                <label style={{ fontWeight: 600, fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  Side-by-Side 835 Conversion Review Notes *:
+              <div className="step-custom-box" style={{ padding: '8px 12px' }}>
+                <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Side-by-Side 835 Conversion Review Notes *
                 </label>
                 <textarea
-                  rows={2}
-                  style={{ width: '100%', padding: 6, border: '1px solid var(--line)', fontSize: 12.5 }}
+                  rows={1}
+                  style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }}
                   placeholder="e.g. Verified side-by-side 835 conversion claim totals CLP, BPR, and TRN against MIR format."
                   value={s10Notes}
                   onChange={(e) => setS10Notes(e.target.value)}
                 />
                 <div style={{ marginTop: 6, textAlign: 'right' }}>
-                  <button className="btn tiny success" onClick={async () => {
+                  <button className="btn tiny primary" onClick={async () => {
                     if (!s10Notes.trim()) { 
                       setFeedback({ isOpen: true, kind: 'bad', title: 'Evidence Required', content: 'Step 10 Evidence Required: Please enter side-by-side 835 conversion review notes.', checks: [] }); 
                       return; 
@@ -842,7 +891,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                     } catch (err) { 
                       setFeedback({ isOpen: true, kind: 'bad', title: 'Submission Error', content: err.message, checks: [] }); 
                     }
-                  }}>✓ Complete Step 10</button>
+                  }}>Submit &amp; Complete Step 10</button>
                 </div>
               </div>
             )}

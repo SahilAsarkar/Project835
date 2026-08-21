@@ -583,7 +583,7 @@ def api_admin_client_state(request, client_id):
             (6, "Delivery method agreed", "Configure secure transfer mechanism (SFTP, API drop)."),
             (7, "Sample 835 received and validated", "Validate structural integrity of sample X12 835 file."),
             (8, "Mapping rules written & configured", "Open Mapping Application to configure 835 conversion."),
-            (9, "Test environment created & SFTP configured", "Open SFTP App to provision test folders and SSH keys."),
+            (9, "Create user", "Open SFTP App to provision test folders and SSH keys."),
             (10, "Test conversions reviewed with client", "Verify side-by-side conversion of sample 835 files."),
             (11, "Send test file to client FTP", "Transmit verified test payload to client FTP server."),
             (12, "Upload email conversation attachment", "Attach email confirmation."),
@@ -642,6 +642,13 @@ def api_admin_client_state(request, client_id):
             from accounts.models import ClientContact
             contacts = ClientContact.objects.filter(client=client_obj).values("id", "role_name", "name", "email", "phone")
             extra_data["contacts"] = list(contacts)
+        elif step.step_number == 9:
+            from accounts.models import User
+            users = User.objects.filter(client=client_obj).values("id", "name", "email", "mobile", "is_staff")
+            extra_data["users"] = [
+                {**u, "role": "Admin" if u.get("is_staff") else "User"} 
+                for u in users
+            ]
             
         steps_data.append({
             "id": step.step_number,
