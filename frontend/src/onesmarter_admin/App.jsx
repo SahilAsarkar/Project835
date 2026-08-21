@@ -174,17 +174,6 @@ export default function App() {
   const handleSelectClientInGoLive = (clientId) => {
     setActiveClientId(clientId);
     loadClientWorkflow(clientId);
-    const target = clients.find(c => c.id === clientId);
-    const stage = (target?.stage || '').toLowerCase().replace(/[\s-]/g, '_');
-    const isCompleted = (target?.progress_pct >= 100) || stage === 'onboarding_completed' || stage === 'golive_pending' || stage === 'production_pending' || stage === 'production';
-
-    if (!isCompleted) {
-      // Incomplete onboarding -> Redirect to Onboarding for that client
-      setActiveNav('onboard');
-    } else {
-      // All onboarding steps complete -> Stay in Go Live
-      setActiveNav('promote');
-    }
   };
 
   const handleOpenRevoke = (client) => {

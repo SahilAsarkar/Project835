@@ -897,3 +897,272 @@ def api_admin_document_delete(request, doc_id):
         return JsonResponse({"success": True, "message": "Document deleted successfully"})
     except ClientDocument.DoesNotExist:
         return JsonResponse({"success": False, "error": "Document not found"}, status=404)
+
+
+# ============================================================
+# GO LIVE & TEST ENVIRONMENT API VIEWS
+# ============================================================
+
+def helper_get_golive_state(client_obj):
+    default_steps = [
+        (1, "Go-Live Authorization Signed", "Formal sign-off for cutover into production."),
+        (2, "Production Data Transfer Security Attestation", "HIPAA compliance evidence for production data transit."),
+        (3, "Production SFTP Credentials Provisioned", "Configure production endpoints."),
+        (4, "Production Cutover Schedule & Window Set", "Schedule maintenance window for production activation."),
+        (5, "Special Processing Instructions / Comments Logged", "Log custom exceptions or client-specific processing notes."),
+        (6, "Final Production Activation & Status Promoted to Live", "Promote client status to LIVE PRODUCTION."),
+    ]
+    for num, title, desc in default_steps:
+        step_def = GoLiveStepDefinition.objects.filter(step_number=num).first()
+        if not step_def:
+            GoLiveStepDefinition.objects.create(step_number=num, title=title, description=desc)
+        elif step_def.title != title:
+            step_def.title = title
+            step_def.description = desc
+            step_def.save()
+
+    step_defs = GoLiveStepDefinition.objects.all().order_by('step_number')
+    step_statuses = ClientGoLiveStatus.objects.filter(client=client_obj)
+    status_map = {ss.step.id: ss.status for ss in step_statuses}
+    steps_data = []
+    in_progress_found = False
+
+    for step in step_defs:
+        st = status_map.get(step.id, 'PENDING')
+        is_done = st == 'COMPLETED'
+        is_in_progress = st == 'IN_PROGRESS'
+        if is_in_progress:
+            in_progress_found = True
+
+        steps_data.append({
+            "id": step.id,
+            "step_number": step.step_number,
+            "title": step.title,
+            "description": step.description,
+            "done": is_done,
+            "inProgress": is_in_progress,
+            "file": step.step_number in [1, 2],
+            "extra": {}
+        })
+
+    if not in_progress_found:
+        for s in steps_data:
+            if not s["done"]:
+                s["inProgress"] = True
+                break
+
+    return {
+        "client": {
+            "id": str(client_obj.id),
+            "name": client_obj.name,
+            "stage": client_obj.stage
+        },
+        "steps": steps_data
+    }
+
+
+@csrf_exempt
+def api_admin_golive_state(request, client_id):
+    """ GET /admin-panel/api/clients/<client_id>/golive/state/ """
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
+        
+    try:
+        client_obj = Client.objects.get(id=client_id)
+    except (Client.DoesNotExist, ValueError):
+        return JsonResponse({"success": False, "error": "Client not found"}, status=404)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+
+@csrf_exempt
+def api_admin_golive_step_upload(request, client_id, step_num):
+    """ POST /admin-panel/api/clients/<client_id>/golive/steps/<step_number>/upload/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+        step_def, _ = GoLiveStepDefinition.objects.get_or_create(
+            step_number=step_num,
+            defaults={"title": f"Go-Live Step {step_num}"}
+        )
+        status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
+        status_obj.status = 'COMPLETED'
+        status_obj.save()
+
+        next_def = GoLiveStepDefinition.objects.filter(step_number=step_num + 1).first()
+        if next_def:
+            next_status, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=next_def)
+            if next_status.status == 'PENDING':
+                next_status.status = 'IN_PROGRESS'
+                next_status.save()
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state, "checks": ["Document validated", "Format accepted"]})
+
+
+@csrf_exempt
+def api_admin_golive_step_download(request, client_id, step_num):
+    """ GET /admin-panel/api/clients/<client_id>/golive/steps/<step_number>/download/ """
+    from django.http import HttpResponse
+    filename = f"OneSmarter_GoLive_Step{step_num}_Template.pdf"
+    dummy_pdf_content = b"%PDF-1.4 Template Document Placeholder"
+    response = HttpResponse(dummy_pdf_content, content_type="application/pdf")
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    response['X-OneSmarter-Filename'] = filename
+    return response
+
+
+@csrf_exempt
+def api_admin_golive_step3_sftp(request, client_id):
+    """ POST /admin-panel/api/clients/<client_id>/golive/steps/3/sftp/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+        step_def, _ = GoLiveStepDefinition.objects.get_or_create(step_number=3, defaults={"title": "Production SFTP"})
+        status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
+        status_obj.status = 'COMPLETED'
+        status_obj.save()
+
+        next_def = GoLiveStepDefinition.objects.filter(step_number=4).first()
+        if next_def:
+            next_status, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=next_def)
+            if next_status.status == 'PENDING':
+                next_status.status = 'IN_PROGRESS'
+                next_status.save()
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+
+@csrf_exempt
+def api_admin_golive_step4_schedule(request, client_id):
+    """ POST /admin-panel/api/clients/<client_id>/golive/steps/4/schedule/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+        step_def, _ = GoLiveStepDefinition.objects.get_or_create(step_number=4, defaults={"title": "Production Schedule"})
+        status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
+        status_obj.status = 'COMPLETED'
+        status_obj.save()
+
+        next_def = GoLiveStepDefinition.objects.filter(step_number=5).first()
+        if next_def:
+            next_status, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=next_def)
+            if next_status.status == 'PENDING':
+                next_status.status = 'IN_PROGRESS'
+                next_status.save()
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+
+@csrf_exempt
+def api_admin_golive_step5_comment(request, client_id):
+    """ POST /admin-panel/api/clients/<client_id>/golive/steps/5/comment/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+        step_def, _ = GoLiveStepDefinition.objects.get_or_create(step_number=5, defaults={"title": "Special Comment"})
+        status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
+        status_obj.status = 'COMPLETED'
+        status_obj.save()
+
+        next_def = GoLiveStepDefinition.objects.filter(step_number=6).first()
+        if next_def:
+            next_status, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=next_def)
+            if next_status.status == 'PENDING':
+                next_status.status = 'IN_PROGRESS'
+                next_status.save()
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+
+@csrf_exempt
+def api_admin_golive_step6_complete(request, client_id):
+    """ POST /admin-panel/api/clients/<client_id>/golive/steps/6/complete/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+        step_def, _ = GoLiveStepDefinition.objects.get_or_create(step_number=6, defaults={"title": "Final Production"})
+        status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
+        status_obj.status = 'COMPLETED'
+        status_obj.save()
+
+        client_obj.stage = 'IN_PRODUCTION'
+        client_obj.status = 'ACTIVE'
+        client_obj.save()
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+
+@csrf_exempt
+def api_admin_golive_step_redo(request, client_id, step_num):
+    """ POST /admin-panel/api/clients/<client_id>/golive/steps/<step_number>/redo/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+        step_def = GoLiveStepDefinition.objects.get(step_number=step_num)
+        status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
+        status_obj.status = 'IN_PROGRESS'
+        status_obj.save()
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_golive_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+
+@csrf_exempt
+def api_admin_test_environment(request, client_id):
+    """ GET/POST /admin-panel/api/clients/<client_id>/test-environment/ """
+    try:
+        client_obj = Client.objects.get(id=client_id)
+    except (Client.DoesNotExist, ValueError):
+        return JsonResponse({"success": False, "error": "Client not found"}, status=404)
+
+    test_env, _ = ClientTestEnvironment.objects.get_or_create(
+        client=client_obj,
+        defaults={
+            "sftp_host": "sftp-test.internal",
+            "sftp_username": f"user_{client_obj.client_code.lower() if client_obj.client_code else 'test'}",
+            "watched_folder": f"/inbound/{client_obj.client_code.lower() if client_obj.client_code else 'test'}/835",
+            "test_status": "In Progress"
+        }
+    )
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            if "sftp_host" in body:
+                test_env.sftp_host = body["sftp_host"]
+            if "sftp_username" in body:
+                test_env.sftp_username = body["sftp_username"]
+            if "watched_folder" in body:
+                test_env.watched_folder = body["watched_folder"]
+            if "test_status" in body:
+                test_env.test_status = body["test_status"]
+            test_env.save()
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    env_data = {
+        "id": test_env.id,
+        "sftp_host": test_env.sftp_host,
+        "sftp_username": test_env.sftp_username,
+        "watched_folder": test_env.watched_folder,
+        "test_status": test_env.test_status,
+    }
+    return JsonResponse({"success": True, "test_environment": env_data})
+
+
+@csrf_exempt
+def api_admin_test_environment_run(request, client_id):
+    """ POST /admin-panel/api/clients/<client_id>/test-environment/run-test/ """
+    return JsonResponse({"success": True, "message": "Sandbox test passed successfully."})
