@@ -49,19 +49,38 @@ export default function AccessView({ currentUser }) {
     }
   }
 
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.is_superuser;
+
   const handleCreateUser = async (userData) => {
+    if ((userData.role === 'Admin' || userData.role === 'Super Admin') && !isSuperAdmin) {
+      alert("Access Denied: Standard Admins cannot create Admin or Super Admin accounts.");
+      return;
+    }
     await createUser(userData);
     setShowCreateModal(false);
     loadAccess();
   };
 
   const handleEditUser = async (userId, updatedData) => {
+    const targetUser = accessData?.staff?.find(u => u.id === userId);
+    const targetIsAdmin = targetUser?.role === 'Admin' || targetUser?.role === 'Super Admin' || targetUser?.is_staff || targetUser?.is_superuser;
+    const tryingToPromote = updatedData.role === 'Admin' || updatedData.role === 'Super Admin';
+
+    if ((targetIsAdmin || tryingToPromote) && !isSuperAdmin) {
+      alert("Access Denied: Standard Admins cannot modify Admin/Super Admin roles or accounts.");
+      return;
+    }
     await updateUser(userId, updatedData);
     setShowEditModal(false);
     loadAccess();
   };
 
   const handleDeleteUser = async (member) => {
+    const isTargetAdmin = member.role === 'Admin' || member.role === 'Super Admin' || member.is_staff || member.is_superuser;
+    if (isTargetAdmin && !isSuperAdmin) {
+      alert("Access Denied: Standard Admins cannot delete Admin or Super Admin accounts.");
+      return;
+    }
     const isCurrentUser = member.email === currentUser?.email;
     const confirmMsg = isCurrentUser
       ? `WARNING: You are about to delete your own administrative account (${member.email}). Are you sure you want to proceed?`
