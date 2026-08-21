@@ -532,16 +532,18 @@ export async function createUser(userData) {
 }
 
 // --- 5. MIR Mapper Service ---
-export async function fetchMappings() {
-  const res = await fetch(`${BASE_URL}/mappings/`, {
+export async function fetchMappings(clientId) {
+  const url = clientId ? `${BASE_URL}/mappings/?client_id=${encodeURIComponent(clientId)}` : `${BASE_URL}/mappings/`;
+  const res = await fetch(url, {
     headers: getAuthHeaders()
   });
   if (!res.ok) throw new Error('Failed to fetch mappings');
   return res.json();
 }
 
-export async function saveMappings(fields) {
-  const res = await fetch(`${BASE_URL}/mappings/`, {
+export async function saveMappings(fields, clientId) {
+  const url = clientId ? `${BASE_URL}/mappings/?client_id=${encodeURIComponent(clientId)}` : `${BASE_URL}/mappings/`;
+  const res = await fetch(url, {
     method: 'PUT',
     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ fields })
@@ -551,8 +553,9 @@ export async function saveMappings(fields) {
   return data;
 }
 
-export async function checkMappings(fields) {
-  const res = await fetch(`${BASE_URL}/mappings/check/`, {
+export async function checkMappings(fields, clientId) {
+  const url = clientId ? `${BASE_URL}/mappings/check/?client_id=${encodeURIComponent(clientId)}` : `${BASE_URL}/mappings/check/`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ fields })
@@ -562,8 +565,9 @@ export async function checkMappings(fields) {
   return data;
 }
 
-export async function resetMappings() {
-  const res = await fetch(`${BASE_URL}/mappings/reset/`, {
+export async function resetMappings(clientId) {
+  const url = clientId ? `${BASE_URL}/mappings/reset/?client_id=${encodeURIComponent(clientId)}` : `${BASE_URL}/mappings/reset/`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: getAuthHeaders()
   });

@@ -1459,3 +1459,103 @@ def api_admin_employee_roles(request):
             return JsonResponse({"success": False, "error": str(e)}, status=400)
 
     return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+
+
+from admin_panel.mir_mapper_logic.mapping_store import get_mappings, save_mappings, reset_mappings, validate_mappings
+from admin_panel.mir_mapper_logic.mapping_defaults import defaults
+
+@csrf_exempt
+def api_mappings_view(request):
+    """
+    GET /admin-panel/api/mappings/?client_id=<uuid>
+    PUT /admin-panel/api/mappings/?client_id=<uuid>
+    """
+    client_id = request.GET.get("client_id")
+    client = None
+    if client_id:
+        try:
+            client = Client.objects.get(id=client_id)
+        except (Client.DoesNotExist, ValueError):
+            return JsonResponse({"success": False, "error": "Client not found"}, status=404)
+
+    if request.method == 'GET':
+        current = get_mappings(client)
+        # Calculate changed count relative to baseline defaults
+        baseline = {field["id"]: field for field in defaults()}
+        editable = ("mapType", "map", "length", "start", "upper", "trim", "truncate", "align", "pad", "fallbackType", "fallbackValue", "technicalRule")
+        changed = sum(
+            1
+            for field in current
+            if any(str(field.get(key)) != str(baseline[field["id"]].get(key)) for key in editable)
+        )
+        return JsonResponse({
+            "ok": True,
+            "success": True,
+            "baseline": defaults(),
+            "fields": current,
+            "changed": changed
+        })
+    elif request.method == 'PUT':
+        if not client:
+            return JsonResponse({"success": False, "error": "client_id is required to save mappings"}, status=400)
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            fields = body.get("fields", [])
+            if not isinstance(fields, list):
+                return JsonResponse({"detail": "fields must be a list"}, status=400)
+            saved = save_mappings(fields, client)
+            return JsonResponse({
+                "ok": True,
+                "success": True,
+                "fields": saved,
+                "note": "Saved mappings are now used by the 835 to MIR converter."
+            })
+        except ValueError as exc:
+            return JsonResponse({"detail": str(exc), "error": str(exc)}, status=400)
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+
+
+@csrf_exempt
+def api_mappings_check(request):
+    """
+    POST /admin-panel/api/mappings/check/
+    """
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+        fields = body.get("fields", [])
+        if not isinstance(fields, list):
+            return JsonResponse({"detail": "fields must be a list"}, status=400)
+        issues = validate_mappings(fields)
+        return JsonResponse({"ok": not issues, "success": not issues, "issues": issues})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+
+@csrf_exempt
+def api_mappings_reset(request):
+    """
+    POST /admin-panel/api/mappings/reset/?client_id=<uuid>
+    """
+    if request.method != 'POST':
+        return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
+    client_id = request.GET.get("client_id")
+    client = None
+    if client_id:
+        try:
+            client = Client.objects.get(id=client_id)
+        except (Client.DoesNotExist, ValueError):
+            return JsonResponse({"success": False, "error": "Client not found"}, status=404)
+            
+    fields = reset_mappings(client)
+    return JsonResponse({
+        "ok": True,
+        "success": True,
+        "fields": fields,
+        "note": "Mappings reset to the current converter baseline."
+    })
+

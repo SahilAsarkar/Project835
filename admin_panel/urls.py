@@ -33,6 +33,9 @@ from .views import (
     api_admin_golive_step_redo,
     api_admin_test_environment_run,
     api_admin_employee_roles,
+    api_mappings_view,
+    api_mappings_check,
+    api_mappings_reset,
 )
 
 urlpatterns = [
@@ -75,4 +78,10 @@ urlpatterns = [
     path("api/stats/", api_admin_stats, name="admin_api_stats"),
     path("api/stats", api_admin_stats),
     path("api/employee-roles/", api_admin_employee_roles, name="admin_api_employee_roles"),
+    path("api/mappings/", api_mappings_view, name="admin_api_mappings"),
+    path("api/mappings", api_mappings_view),
+    path("api/mappings/check/", api_mappings_check, name="admin_api_mappings_check"),
+    path("api/mappings/check", api_mappings_check),
+    path("api/mappings/reset/", api_mappings_reset, name="admin_api_mappings_reset"),
+    path("api/mappings/reset", api_mappings_reset),
 ]

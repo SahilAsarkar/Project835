@@ -53,13 +53,13 @@ def _service_block(service: ServiceLine, claim: Claim, sequence: int, max_sequen
     return result
 
 
-def generate_mir_records(claims: Iterable[Claim]) -> Tuple[List[str], Dict[str, int]]:
+def generate_mir_records(claims: Iterable[Claim], client=None) -> Tuple[List[str], Dict[str, int]]:
     records: List[str] = []
     total_claims = 0
     total_services = 0
     split_claims = 0
     output_bytes = 0
-    fields = get_mappings()
+    fields = get_mappings(client)
 
     for claim in claims:
         total_claims += 1
@@ -115,8 +115,8 @@ def generate_mir_records(claims: Iterable[Claim]) -> Tuple[List[str], Dict[str, 
     }
 
 
-def generate_mir_text(claims: Iterable[Claim]) -> Tuple[str, Dict[str, int]]:
-    records, summary = generate_mir_records(claims)
+def generate_mir_text(claims: Iterable[Claim], client=None) -> Tuple[str, Dict[str, int]]:
+    records, summary = generate_mir_records(claims, client)
     text = "\r\n".join(records)
     if records:
         text += "\r\n"

@@ -80,7 +80,7 @@ export default function OnboardingLadder({ client, steps, roles, clients, onSele
     setReturnPrompt({ isOpen: false, pendingKey: '', stepName: '' });
     if (pKey && client) {
       try {
-        await postStepData(`/clients/${encodeURIComponent(client.id)}/onboarding/steps/${encodeURIComponent(pKey)}/complete/`, {});
+        await postStepData(`/clients/${encodeURIComponent(client.id)}/steps/${encodeURIComponent(pKey)}/complete/`, {});
         await onRefresh();
       } catch (err) {
         setLadderFeedback({ isOpen: true, kind: 'bad', title: 'Step Completion Error', content: err.message });

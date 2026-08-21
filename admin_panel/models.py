@@ -109,3 +109,27 @@ class ClientDocument(models.Model):
 
     def __str__(self):
         return f"{self.document_name} ({self.client.name})"
+
+
+class MirMappingField(models.Model):
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='mir_mappings')
+    field_id = models.CharField(max_length=50)
+    map_type = models.CharField(max_length=50)
+    map_value = models.TextField(blank=True, null=True)
+    length = models.IntegerField()
+    start = models.IntegerField()
+    upper = models.BooleanField(default=False)
+    trim = models.BooleanField(default=False)
+    truncate = models.BooleanField(default=False)
+    align = models.CharField(max_length=10)
+    pad = models.CharField(max_length=10)
+    fallback_type = models.CharField(max_length=50, blank=True, null=True)
+    fallback_value = models.TextField(blank=True, null=True)
+    technical_rule = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('client', 'field_id')
+
+    def __str__(self):
+        return f"{self.client.name} - {self.field_id}"
+

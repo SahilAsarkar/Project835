@@ -52,12 +52,15 @@ def _merge_saved(saved: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return base
 
 
-def get_mappings() -> list[dict[str, Any]]:
-    from .models import MirMappingField
+def get_mappings(client=None) -> list[dict[str, Any]]:
+    from admin_panel.models import MirMappingField
     base = defaults()
     by_id = {f["id"]: f for f in base}
     
-    saved_records = MirMappingField.objects.all()
+    if client is None:
+        return base
+        
+    saved_records = MirMappingField.objects.filter(client=client)
     if not saved_records.exists():
         return base
         
@@ -84,15 +87,16 @@ def get_mappings() -> list[dict[str, Any]]:
         if issues:
             raise ValueError("; ".join(issues))
     except Exception as e:
-        logger.warning("Saved mapping configuration is invalid; using defaults: %s", e)
+        logger.warning("Saved mapping configuration is invalid for client %s; using defaults: %s", client, e)
         return defaults()
         
     return base
 
 
-def reset_mappings() -> list[dict[str, Any]]:
-    from .models import MirMappingField
-    MirMappingField.objects.all().delete()
+def reset_mappings(client=None) -> list[dict[str, Any]]:
+    from admin_panel.models import MirMappingField
+    if client is not None:
+        MirMappingField.objects.filter(client=client).delete()
     return defaults()
 
 
@@ -179,8 +183,8 @@ def validate_mappings(fields: list[dict[str, Any]]) -> list[str]:
     return issues
 
 
-def save_mappings(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    from .models import MirMappingField
+def save_mappings(fields: list[dict[str, Any]], client=None) -> list[dict[str, Any]]:
+    from admin_panel.models import MirMappingField
     base_by_id = {f["id"]: f for f in defaults()}
     if any(not isinstance(field, dict) for field in fields):
         raise ValueError("Every mapping field must be an object")
@@ -207,8 +211,12 @@ def save_mappings(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if issues:
         raise ValueError("\n".join(issues))
 
+    if client is None:
+        raise ValueError("A client must be specified to save mapping configuration.")
+
     for item in normalized:
         MirMappingField.objects.update_or_create(
+            client=client,
             field_id=item["id"],
             defaults={
                 "map_type": item.get("mapType", ""),
@@ -226,4 +234,4 @@ def save_mappings(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
 
-    return get_mappings()
+    return get_mappings(client)

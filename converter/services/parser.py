@@ -371,8 +371,12 @@ def generate_mir_text(claims, filename=None):
         "records_count": len(records)
     }
 
-def parse_835_to_mir(text, filename=None):
-    claims = parse_835(text, filename=filename)
-    if not claims:
-        raise ValueError("No CLP claim segments were found in the provided EDI content.")
-    return generate_mir_text(claims, filename=filename)
+def parse_835_to_mir(text, filename=None, client=None):
+    from admin_panel.mir_mapper_logic.converter import convert_835_to_mir
+    mir_text, summary = convert_835_to_mir(text, client=client)
+    return {
+        "text": mir_text,
+        "claims_count": summary["claims"],
+        "services_count": summary["services"],
+        "records_count": summary["mir_records"]
+    }

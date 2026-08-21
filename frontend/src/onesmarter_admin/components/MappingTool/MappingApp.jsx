@@ -91,11 +91,11 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
   
   useEffect(() => {
     loadServerMappings();
-  }, []);
+  }, [targetClientId]);
   
   const loadServerMappings = async () => {
     try {
-      const data = await apiFetchMappings();
+      const data = await apiFetchMappings(targetClientId);
       if (!data.ok && data.detail) throw new Error(data.detail);
       
       const b = data.baseline || [];
@@ -135,7 +135,7 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
         truncate:!!f.truncate, align:f.align, pad:f.pad,
         fallbackType:f.fallbackType, fallbackValue:f.fallbackValue, technicalRule:f.technicalRule
       }));
-      const data = await apiSaveMappings(payload);
+      const data = await apiSaveMappings(payload, targetClientId);
       if (!data.ok && data.detail) throw new Error(data.detail);
       
       // Re-apply
@@ -153,7 +153,7 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
       
       if (targetClientId) {
         try {
-          await postStepData(`/clients/${encodeURIComponent(targetClientId)}/onboarding/steps/step_8_mapping/complete/`, {});
+          await postStepData(`/clients/${encodeURIComponent(targetClientId)}/steps/step_8_mapping/complete/`, {});
           localStorage.setItem('cross_tab_refresh', Date.now().toString());
         } catch (stepErr) {
           console.error("Could not complete step automatically:", stepErr);
@@ -178,7 +178,7 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
   const executeResetAll = async () => {
     setResetConfirmOpen(false);
     try {
-      const data = await apiResetMappings();
+      const data = await apiResetMappings(targetClientId);
       if (!data.ok && data.detail) throw new Error(data.detail);
       
       const byId = new Map((data.fields || []).map(x => [x.id, x]));
@@ -242,7 +242,7 @@ export default function MappingApp({ clients = [], activeClientId, currentClient
             truncate:!!f.truncate, align:f.align, pad:f.pad,
             fallbackType:f.fallbackType, fallbackValue:f.fallbackValue, technicalRule:f.technicalRule
           }));
-          const data = await apiCheckMappings(payload);
+          const data = await apiCheckMappings(payload, targetClientId);
           if (!data.ok && data.detail) throw new Error();
           const prefix = selectedField.id + ': ';
           const issue = (data.issues || []).find(item => item.startsWith(prefix));

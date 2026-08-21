@@ -168,7 +168,7 @@ def upload_835_to_sftp(local_file_path, filename):
     return False
 
 
-def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12", file_id=None, ingestion_source="MANUAL"):
+def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12", file_id=None, ingestion_source="MANUAL", client=None):
     edi_text = (edi_text or "").lstrip("\ufeff").strip()
     """
     Processes EDI 835 content through the complete pipeline when 'Submit & Convert to MIR' is triggered:
@@ -203,6 +203,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
         file_uuid = uuid.uuid4()
         db_record = EDI835File.objects.create(
             id=file_uuid,
+            client=client,
             original_filename=original_filename,
             stored_filename=stored_filename,
             status="UPLOADED",
@@ -210,6 +211,8 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
             ingestion_source=ingestion_source
         )
     else:
+        if client:
+            db_record.client = client
         db_record.original_filename = original_filename
         db_record.stored_filename = stored_filename
         db_record.input_path = relative_input_path
@@ -227,7 +230,8 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
 
     try:
         # Step 3: Perform 835 parsing and MIR conversion during processing
-        res = parse_835_to_mir(edi_text, filename=stored_filename)
+        client = db_record.client if db_record else None
+        res = parse_835_to_mir(edi_text, filename=stored_filename, client=client)
         mir_text = res["text"]
 
         # Step 4: Write converted MIR file to output/ folder

@@ -323,7 +323,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
         role: 'User',
         clients: [clientId]
       });
-      await postStepData(`/clients/${encodeURIComponent(clientId)}/onboarding/steps/step_9_sftp/complete/`, {});
+      await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_9_sftp/complete/`, {});
       setFeedback({ isOpen: true, kind: 'ok', title: 'User Created', content: `Successfully created user ${s9Email} and linked to ${clientId}. Step 9 completed.`, checks: [] });
       await onRefresh();
     } catch (err) {
@@ -847,7 +847,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                       return; 
                     }
                     try {
-                      await postStepData(`/clients/${encodeURIComponent(clientId)}/onboarding/steps/step_10_test_review/complete/`, { submission_text: s10Notes });
+                      await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_10_test_review/complete/`, { submission_text: s10Notes });
                       onRefresh();
                     } catch (err) { 
                       setFeedback({ isOpen: true, kind: 'bad', title: 'Submission Error', content: err.message, checks: [] }); 
