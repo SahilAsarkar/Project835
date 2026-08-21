@@ -180,13 +180,20 @@ export async function uploadStepFile(clientId, stepKey, file) {
   return data;
 }
 
-export async function validateStaged835(clientId) {
+export async function validateStaged835(clientId, file) {
   const res = await fetch(`${BASE_URL}/clients/${encodeURIComponent(clientId)}/steps/step_7_835_val/validate-uploaded/`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: getAuthHeaders({
+      'X-Filename': file.name
+    }),
+    body: file
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || '835 validation failed');
+  if (!res.ok) {
+    const err = new Error(data.error || '835 validation failed');
+    err.checks = data.checks || [];
+    throw err;
+  }
   return data;
 }
 

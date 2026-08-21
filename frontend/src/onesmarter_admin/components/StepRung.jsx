@@ -184,23 +184,27 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
       return;
     }
     try {
-      await uploadStepFile(clientId, step.key, file);
+      setValidating835(true);
+      const res = await validateStaged835(clientId, file);
       setFeedback({
         isOpen: true,
         kind: 'ok',
-        title: '835 File Staged',
-        content: `Uploaded ${file.name}. Click "✓ Validate 835" to run full structural X12 checks.`,
-        checks: []
+        title: '835 Structural Validation Passed',
+        content: 'Step 7 Complete: Deep X12 835 structural and balance checks passed.',
+        checks: res.checks || []
       });
       await onRefresh();
     } catch (err) {
       setFeedback({
         isOpen: true,
         kind: 'bad',
-        title: 'Upload Error',
+        title: '835 Validation Failed',
         content: err.message,
-        checks: []
+        checks: err.checks || []
       });
+      await onRefresh();
+    } finally {
+      setValidating835(false);
     }
   };
 
@@ -738,28 +742,16 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                 )}
                 {isFailed && <div style={{ color: 'var(--brick)', fontSize: 12, marginBottom: 8 }}>✕ Validation Failed. Please inspect X12 structure or re-upload a valid 835 file.</div>}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label className={`btn tiny ${step.done ? 'success' : 'primary'}`} style={{ cursor: 'pointer' }}>
-                    ⬆ Upload 835 File
-                    <input type="file" hidden accept=".835,.x12,.edi,.txt,.dat,.35,.ansi,.rem" onChange={handleStep7Upload} />
+                  <label className={`btn tiny ${step.done ? 'success' : 'primary'}`} style={{ cursor: validating835 ? 'not-allowed' : 'pointer' }}>
+                    {validating835 ? (
+                      <>
+                        <span className="spinner-icon" /> Validating...
+                      </>
+                    ) : (
+                      '⬆ Upload & Validate 835'
+                    )}
+                    <input type="file" hidden accept=".835,.x12,.edi,.txt,.dat,.35,.ansi,.rem" onChange={handleStep7Upload} disabled={validating835} />
                   </label>
-                  {step.inProgress && (
-                    <button 
-                      type="button"
-                      className="btn tiny success" 
-                      onClick={handleValidate835} 
-                      disabled={validating835}
-                      style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      {validating835 ? (
-                        <>
-                          <span className="spinner-icon" />
-                          Validating 835...
-                        </>
-                      ) : (
-                        '✓ Validate 835'
-                      )}
-                    </button>
-                  )}
                 </div>
               </div>
             )}
