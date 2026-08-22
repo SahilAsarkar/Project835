@@ -1332,7 +1332,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                 type="file"
                 hidden
                 onChange={handleStandardFileUpload}
-                accept={step.actionType === 'email_upload' ? "image/*,.png,.jpg,.jpeg,.webp,.gif,.svg,.bmp,.tiff,.tif,.ico,.avif,.pdf,.eml,.msg,.txt,.doc,.docx" : (step.ext ? `.${step.ext}` : undefined)}
+                accept={step.actionType === 'email_upload' ? "image/*,.png,.jpg,.jpeg,.webp,.gif,.svg,.bmp,.tiff,.tif,.ico,.avif,.pdf,.eml,.msg,.txt,.doc,.docx" : (step.file ? ".pdf,.doc,.docx" : (step.ext ? `.${step.ext}` : undefined))}
               />
             </label>
           )}

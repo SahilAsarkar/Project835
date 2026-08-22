@@ -5,7 +5,7 @@ export default function RedoConfirmModal({ isOpen, onClose, stepNum, onConfirm, 
   return (
     <CenteredModal isOpen={isOpen} onClose={onClose}>
       <div className="modal-t" style={{ color: 'var(--brick)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span>⚠️</span> Redo Onboarding Step
+        Redo Onboarding Step
       </div>
       <div className="modal-b" id="redo-modal-desc">
         Redo <b>Step {stepNum}</b>?<br /><br />

@@ -23,7 +23,6 @@ export default function ConfirmModal({
           gap: '8px'
         }}
       >
-        <span>{kind === 'danger' || kind === 'warning' ? '⚠️' : 'ℹ️'}</span>
         {title}
       </div>
       <div className="modal-b" style={{ marginTop: '10px' }}>

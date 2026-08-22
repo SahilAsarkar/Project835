@@ -278,6 +278,7 @@ def validate_template_structural_integrity(step_number: int, buf: bytes, is_pdf:
 def validate_step_upload(step_number: int, buf: bytes, orig_filename: str) -> dict:
     name = (orig_filename or "").strip()
     is_pdf = buf.startswith(b"%PDF") or b"%PDF-" in buf[:1024] or name.lower().endswith(".pdf")
+    is_word = name.lower().endswith(".docx") or name.lower().endswith(".doc")
 
     # Step 7: 835 EDI file validation
     if step_number == 7:
@@ -323,12 +324,21 @@ def validate_step_upload(step_number: int, buf: bytes, orig_filename: str) -> di
             ]
         }
 
-    # Steps 1, 2, 3 PDF checks
-    if step_number in (1, 2, 3) and not is_pdf:
-        return {
-            "ok": False,
-            "checks": [{"ok": False, "label": "File format", "detail": f"Expected a PDF document for this step. <b>{esc(name)}</b> is not a valid PDF file."}]
-        }
+    # Steps 1, 2, 3 PDF & Word checks
+    if step_number in (1, 2, 3):
+        if not is_pdf and not is_word:
+            return {
+                "ok": False,
+                "checks": [{"ok": False, "label": "File format", "detail": f"Expected a PDF or Word document for this step. <b>{esc(name)}</b> is not a valid PDF or Word file."}]
+            }
+        if is_word:
+            return {
+                "ok": True,
+                "checks": [
+                    {"ok": True, "label": "File format", "detail": f"Uploaded document is a valid Word document format ({esc(name)})"},
+                    {"ok": True, "label": "Word Document Acceptance", "detail": "Word documents (.docx/.doc) are accepted directly without text template checks."}
+                ]
+            }
 
     # Template structural comparison against source of truth
     ok_struct, checks_struct = validate_template_structural_integrity(step_number, buf, is_pdf)

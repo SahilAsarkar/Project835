@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from accounts.models import Client, User
 from edi835.models import EDI835File
-from .models import OnboardingStepDefinition, ClientStepStatus, GoLiveStepDefinition, ClientGoLiveStatus, ClientTestEnvironment, AuditLog, ClientSmtpConfig
+from .models import OnboardingStepDefinition, ClientStepStatus, GoLiveStepDefinition, ClientGoLiveStatus, ClientTestEnvironment, AuditLog, ClientSmtpConfig, ClientDocument
 from .smtp_crypto import encrypt_smtp_password, decrypt_smtp_password
 from .document_validator import extract_text_from_file_bytes, validate_document_text
 from validation import (
@@ -706,7 +706,7 @@ def api_admin_client_state(request, client_id):
             completed_golive = ClientGoLiveStatus.objects.filter(client=client_obj, status='COMPLETED').count()
             is_done = (completed_golive == total_golive)
             
-        is_in_progress = st == 'IN_PROGRESS' or (step.step_number == 13 and not is_done)
+        is_in_progress = st == 'IN_PROGRESS' or (step.step_number == 13 and not is_done and st != 'PENDING')
         
         if is_in_progress:
             in_progress_found = True
@@ -733,6 +733,19 @@ def api_admin_client_state(request, client_id):
                     "scheduled_date": local_dt.strftime("%Y-%m-%d"),
                     "scheduled_time": local_dt.strftime("%H:%M")
                 }
+
+        # Load the latest uploaded document for this step (persisted across redos)
+        latest_upload_data = None
+        if is_file_step or step.step_number in [7, 12]:
+            doc_type = f"Onboarding Step {step.step_number}"
+            latest_doc = ClientDocument.objects.filter(client=client_obj, document_type=doc_type).order_by('-created_at').first()
+            if latest_doc:
+                latest_upload_data = {
+                    "id": latest_doc.id,
+                    "original_filename": latest_doc.original_filename,
+                    "uploaded_at": latest_doc.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if latest_doc.created_at else None,
+                    "validation_status": "COMPLETED"
+                }
             
         steps_data.append({
             "id": step.step_number,
@@ -746,11 +759,12 @@ def api_admin_client_state(request, client_id):
             "file": is_file_step,
             "ext": "pdf" if is_file_step else None,
             "extra": extra_data,
-            "latestUpload": None,
+            "latestUpload": latest_upload_data,
             "latestNote": latest_comments.get(step.step_number, None)
         })
 
-    # Auto advance if no step is in progress
+    # Auto advance: only if NO step is currently IN_PROGRESS
+    # After a redo, the redone step is IN_PROGRESS — don't auto-advance past it
     if not in_progress_found:
         for s in steps_data:
             if not s["done"]:
@@ -894,14 +908,25 @@ def api_admin_step_redo(request, client_id, step_key):
         if len(parts) >= 2:
             step_num = int(parts[1])
             client_obj = Client.objects.get(id=client_id)
+
+            # Reset THIS step to IN_PROGRESS
             step_def = OnboardingStepDefinition.objects.get(step_number=step_num)
             step_status, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step_def)
             step_status.status = 'IN_PROGRESS'
             step_status.save()
+
+            # Reset ALL SUBSEQUENT steps to PENDING (locked) — preserve uploaded docs
+            subsequent_steps = OnboardingStepDefinition.objects.filter(step_number__gt=step_num)
+            for s in subsequent_steps:
+                sub_status = ClientStepStatus.objects.filter(client=client_obj, step=s).first()
+                if sub_status and sub_status.status != 'PENDING':
+                    sub_status.status = 'PENDING'
+                    sub_status.save()
+
             update_client_onboarding_stats(client_obj)
     except Exception:
         pass
-    return JsonResponse({"success": True, "message": "Step reset to IN_PROGRESS"})
+    return JsonResponse({"success": True, "message": "Step reset to IN_PROGRESS, subsequent steps locked"})
 
 
 @csrf_exempt
