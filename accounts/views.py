@@ -1,9 +1,12 @@
 import base64
 import io
 import secrets
+import logging
 
 import pyotp
 import qrcode
+
+logger = logging.getLogger("accounts")
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -221,12 +224,14 @@ def api_login(request):
         is_user_staff = bool(user.is_staff or user.is_superuser)
         
         if is_admin_route and not is_user_staff:
+            logger.warning(f"Auth failure: Non-staff user '{user.email}' attempted admin login.")
             return JsonResponse({
                 "success": False,
                 "error": "Access Denied: Standard user credentials cannot be used for administrator login."
             }, status=400)
             
         if not is_admin_route and is_user_staff:
+            logger.warning(f"Auth failure: Staff user '{user.email}' attempted standard login.")
             return JsonResponse({
                 "success": False,
                 "error": "Access Denied: Administrative credentials cannot be used for standard user login."
@@ -234,6 +239,7 @@ def api_login(request):
 
         # Block login for users whose client has been offboarded
         if not is_user_staff and user.client and getattr(user.client, 'stage', '') == 'offboarded':
+            logger.warning(f"Auth failure: User '{user.email}' blocked because client '{user.client.name}' is offboarded.")
             return JsonResponse({
                 "success": False,
                 "error": f"ACCESS DENIED: {user.client.name} has been offboarded. Contact the administrator for assistance.",
@@ -241,6 +247,7 @@ def api_login(request):
             }, status=403)
 
         login(request, user)
+        logger.info(f"Auth success: User '{user.email}' successfully logged in (2FA pending).")
         
         totp_enabled = getattr(user, "totp_enabled", False)
         if totp_enabled:
@@ -292,6 +299,9 @@ def api_login(request):
     for field, field_errs in form.errors.items():
         if field != "__all__":
             errors.extend(field_errs)
+
+    email_attempt = data.get("email", "") if isinstance(data, dict) else ""
+    logger.warning(f"Auth failure: Login failed for '{email_attempt}'. Errors: {errors}")
 
     return JsonResponse({
         "success": False,
@@ -479,6 +489,7 @@ def api_logout(request):
 
 from .models import Client, User
 from edi835.models import EDI835File
+from django.db.models import Count
 
 @csrf_exempt
 def api_admin_clients(request):
@@ -489,7 +500,7 @@ def api_admin_clients(request):
     search_q = request.GET.get("search", "").strip()
     status_q = request.GET.get("status", "").strip()
 
-    clients_qs = Client.objects.all()
+    clients_qs = Client.objects.annotate(users_count=Count("users", distinct=True))
 
     if search_q:
         clients_qs = clients_qs.filter(
@@ -517,7 +528,7 @@ def api_admin_clients(request):
             "address": c.address or "",
             "status": c.status,
             "notes": c.notes or "",
-            "users_count": c.users.count() if hasattr(c, "users") else 0,
+            "users_count": c.users_count,
             "created_at": c.created_at.strftime("%Y-%m-%d %H:%M:%S") if c.created_at else "",
             "updated_at": c.updated_at.strftime("%Y-%m-%d %H:%M:%S") if c.updated_at else "",
         })

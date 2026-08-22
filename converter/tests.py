@@ -34,7 +34,16 @@ class PyX12ValidatorTestSuite(TestCase):
 class ViewsTestCase(TestCase):
 
     def setUp(self):
+        from accounts.models import User
         self.client = Client()
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            name="Test User",
+            mobile="+15550000",
+            password="testpassword"
+        )
+        # Log user in
+        self.client.login(email="testuser@example.com", password="testpassword")
 
     def test_api_convert(self):
         response = self.client.post('/api/convert/', data={'edi_text': SAMPLE_ONE_LINE})

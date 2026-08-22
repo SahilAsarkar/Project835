@@ -1,6 +1,7 @@
 import json
 import logging
 from django.db import models, transaction
+from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -79,17 +80,37 @@ def api_admin_clients(request):
     if total_golive_steps == 0:
         total_golive_steps = 6
 
+    clients_qs = clients_qs.annotate(
+        users_count=Count("users", distinct=True),
+        completed_onboarding_count=Count(
+            "onboarding_steps",
+            filter=Q(onboarding_steps__status="COMPLETED"),
+            distinct=True,
+        ),
+        completed_golive_count=Count(
+            "golive_steps",
+            filter=Q(golive_steps__status="COMPLETED"),
+            distinct=True,
+        ),
+    ).prefetch_related(
+        Prefetch(
+            "onboarding_steps",
+            queryset=ClientStepStatus.objects.filter(status="COMPLETED").select_related("step"),
+            to_attr="completed_onboarding_steps",
+        )
+    )
+
     clients_data = []
     for c in clients_qs:
-        completed_onboarding = c.onboarding_steps.filter(status='COMPLETED').count()
+        completed_onboarding = c.completed_onboarding_count
         onboarding_incomplete = completed_onboarding < total_onboarding_steps
-        
-        completed_golive = c.golive_steps.filter(status='COMPLETED').count()
+
+        completed_golive = c.completed_golive_count
         go_live_completed = (completed_golive == total_golive_steps)
 
         dynamic_stage = c.stage
         if onboarding_incomplete:
-            completed_steps = set(c.onboarding_steps.filter(status='COMPLETED').values_list('step__step_number', flat=True))
+            completed_steps = {ss.step.step_number for ss in c.completed_onboarding_steps}
             in_progress_step = 1
             for num in range(1, total_onboarding_steps + 1):
                 if num not in completed_steps:
@@ -122,7 +143,7 @@ def api_admin_clients(request):
             "progress_pct": c.progress_pct,
             "live_since": c.live_since.strftime("%Y-%m-%dT%H:%M:%SZ") if c.live_since else (c.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if c.created_at else None),
             "notes": c.notes or "",
-            "users_count": c.users.count() if hasattr(c, "users") else 0,
+            "users_count": c.users_count,
             "created_at": c.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if c.created_at else "",
             "updated_at": c.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ") if c.updated_at else "",
         })
@@ -672,8 +693,27 @@ def api_admin_client_state(request, client_id):
             }
 
     step_defs = OnboardingStepDefinition.objects.all().order_by('step_number')
-    step_statuses = ClientStepStatus.objects.filter(client=client_obj)
-    status_map = {ss.step.id: ss.status for ss in step_statuses}
+    step_statuses = ClientStepStatus.objects.filter(client=client_obj).select_related('step')
+    status_map = {ss.step_id: ss.status for ss in step_statuses}
+
+    total_golive = GoLiveStepDefinition.objects.count()
+    if total_golive == 0:
+        total_golive = 6
+    completed_golive = ClientGoLiveStatus.objects.filter(client=client_obj, status='COMPLETED').count()
+
+    latest_docs_by_type = {}
+    for doc in ClientDocument.objects.filter(client=client_obj).order_by('-created_at'):
+        if doc.document_type not in latest_docs_by_type:
+            latest_docs_by_type[doc.document_type] = doc
+
+    from accounts.models import ClientContact
+    contacts_list = list(
+        ClientContact.objects.filter(client=client_obj).values("id", "role_name", "name", "email", "phone")
+    )
+    users_list = [
+        {**u, "role": "Admin" if u.get("is_staff") else "User"}
+        for u in User.objects.filter(client=client_obj).values("id", "name", "email", "mobile", "is_staff")
+    ]
 
     # If steps are empty, create default steps
     if not step_defs.exists():
@@ -734,9 +774,6 @@ def api_admin_client_state(request, client_id):
         
         # Override Step 13 completion based on Go-Live steps
         if step.step_number == 13:
-            total_golive = GoLiveStepDefinition.objects.count()
-            if total_golive == 0: total_golive = 6
-            completed_golive = ClientGoLiveStatus.objects.filter(client=client_obj, status='COMPLETED').count()
             is_done = (completed_golive == total_golive)
             
         is_in_progress = st == 'IN_PROGRESS'
@@ -748,16 +785,9 @@ def api_admin_client_state(request, client_id):
 
         extra_data = {}
         if step.step_number == 4:
-            from accounts.models import ClientContact
-            contacts = ClientContact.objects.filter(client=client_obj).values("id", "role_name", "name", "email", "phone")
-            extra_data["contacts"] = list(contacts)
+            extra_data["contacts"] = contacts_list
         elif step.step_number == 9:
-            from accounts.models import User
-            users = User.objects.filter(client=client_obj).values("id", "name", "email", "mobile", "is_staff")
-            extra_data["users"] = [
-                {**u, "role": "Admin" if u.get("is_staff") else "User"} 
-                for u in users
-            ]
+            extra_data["users"] = users_list
         elif step.step_number == 13:
             if client_obj.live_since:
                 from django.utils.timezone import localtime
@@ -771,7 +801,7 @@ def api_admin_client_state(request, client_id):
         latest_upload_data = None
         if is_file_step or step.step_number in [7, 12]:
             doc_type = f"Onboarding Step {step.step_number}"
-            latest_doc = ClientDocument.objects.filter(client=client_obj, document_type=doc_type).order_by('-created_at').first()
+            latest_doc = latest_docs_by_type.get(doc_type)
             if latest_doc:
                 latest_upload_data = {
                     "id": latest_doc.id,
@@ -1047,21 +1077,22 @@ def api_admin_step_redo(request, client_id, step_key):
             step_num = int(parts[1])
             client_obj = Client.objects.get(id=client_id)
 
-            # Reset THIS step to IN_PROGRESS
-            step_def = OnboardingStepDefinition.objects.get(step_number=step_num)
-            step_status, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step_def)
-            step_status.status = 'IN_PROGRESS'
-            step_status.save()
+            with transaction.atomic():
+                step_def = OnboardingStepDefinition.objects.get(step_number=step_num)
+                step_status, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step_def)
+                step_status.status = 'IN_PROGRESS'
+                step_status.save()
 
-            # Reset ALL SUBSEQUENT steps to PENDING (locked) — preserve uploaded docs
-            subsequent_steps = OnboardingStepDefinition.objects.filter(step_number__gt=step_num)
-            for s in subsequent_steps:
-                sub_status = ClientStepStatus.objects.filter(client=client_obj, step=s).first()
-                if sub_status and sub_status.status != 'PENDING':
+                # Reset ALL SUBSEQUENT steps to PENDING (locked) — preserve uploaded docs
+                subsequent_statuses = ClientStepStatus.objects.filter(
+                    client=client_obj,
+                    step__step_number__gt=step_num,
+                ).exclude(status='PENDING').select_related('step')
+                for sub_status in subsequent_statuses:
                     sub_status.status = 'PENDING'
                     sub_status.save()
 
-            update_client_onboarding_stats(client_obj)
+                update_client_onboarding_stats(client_obj)
 
             # Audit log for step redo
             try:
@@ -1632,10 +1663,18 @@ def helper_get_golive_state(client_obj):
             step_def.save()
 
     step_defs = GoLiveStepDefinition.objects.all().order_by('step_number')
-    step_statuses = ClientGoLiveStatus.objects.filter(client=client_obj)
-    status_map = {ss.step.id: ss.status for ss in step_statuses}
+    step_statuses = ClientGoLiveStatus.objects.filter(client=client_obj).select_related('step')
+    status_map = {ss.step_id: ss.status for ss in step_statuses}
     steps_data = []
     in_progress_found = False
+
+    golive_comments = {}
+    from accounts.models import ClientStepComment
+    for comment in ClientStepComment.objects.filter(
+        client=client_obj, step_number__in=[104, 105]
+    ).order_by('step_number', '-created_at'):
+        if comment.step_number not in golive_comments:
+            golive_comments[comment.step_number] = comment
 
     for step in step_defs:
         st = status_map.get(step.id, 'PENDING')
@@ -1655,15 +1694,13 @@ def helper_get_golive_state(client_obj):
                     "production_date": local_dt.strftime("%Y-%m-%d"),
                     "production_time": local_dt.strftime("%H:%M")
                 }
-            from accounts.models import ClientStepComment
-            note = ClientStepComment.objects.filter(client=client_obj, step_number=104).order_by('-created_at').first()
+            note = golive_comments.get(104)
             if note:
                 extra_data["schedule"] = extra_data.get("schedule", {})
                 extra_data["schedule"]["notes"] = note.comment
-                
+
         if step.step_number == 5:
-            from accounts.models import ClientStepComment
-            note = ClientStepComment.objects.filter(client=client_obj, step_number=105).order_by('-created_at').first()
+            note = golive_comments.get(105)
             if note:
                 latest_note = {
                     "note_text": note.comment,
@@ -2160,17 +2197,22 @@ from admin_panel.models import OffboardingStepDefinition, ClientOffboardingStatu
 def helper_get_offboarding_state(client_obj):
     total = 3
     steps_data = []
-    
+
+    status_by_step = {
+        s.step.step_number: s
+        for s in ClientOffboardingStatus.objects.filter(client=client_obj).select_related('step')
+    }
+
     for i in range(1, total + 1):
-        try:
-            status_obj = ClientOffboardingStatus.objects.get(client=client_obj, step__step_number=i)
+        status_obj = status_by_step.get(i)
+        if status_obj:
             steps_data.append({
                 "step": i,
                 "status": status_obj.status,
                 "document_path": status_obj.document_path,
                 "updated_at": status_obj.updated_at.isoformat() if status_obj.updated_at else None
             })
-        except ClientOffboardingStatus.DoesNotExist:
+        else:
             steps_data.append({
                 "step": i,
                 "status": "PENDING",
@@ -2212,51 +2254,55 @@ def api_admin_offboarding_step_complete(request, client_id, step_num):
             3: "Tenant Key Destruction"
         }
         
-        step_def, _ = OffboardingStepDefinition.objects.get_or_create(
-            step_number=step_num, 
-            defaults={"title": step_titles.get(step_num, f"Offboarding Step {step_num}")}
-        )
-        status_obj, _ = ClientOffboardingStatus.objects.get_or_create(client=client_obj, step=step_def)
-        
-        # If it's step 1 and it's a POST with a file
-        if step_num == 1 and request.method == "POST" and request.body:
-            filename = request.headers.get('X-Filename', 'uploaded_document.pdf')
-            # we could save the file, but for now we just record the name
-            status_obj.document_path = filename
-            
-            from admin_panel.models import ClientDocument
-            from django.core.files.base import ContentFile
-            doc = ClientDocument.objects.create(
-                client=client_obj,
-                document_name="Termination Notice",
-                original_filename=filename,
-                document_type="Offboarding Step 1",
-                file_size=len(request.body),
-                uploaded_by="Admin User"
+        with transaction.atomic():
+            step_def, _ = OffboardingStepDefinition.objects.get_or_create(
+                step_number=step_num,
+                defaults={"title": step_titles.get(step_num, f"Offboarding Step {step_num}")}
             )
-            doc.file.save(filename, ContentFile(request.body), save=True)
-            
-        status_obj.status = 'COMPLETED'
-        status_obj.save()
-        
-        if step_num == 3:
-            client_obj.status = 'INACTIVE'
-            client_obj.stage = 'offboarded'
-            client_obj.save()
-            
-            # Deactivate all users belonging to this client
-            from accounts.models import User as AccountUser
-            client_users = AccountUser.objects.filter(client=client_obj, is_staff=False, is_superuser=False)
-            client_users.update(is_active=False)
-            
-            # Flush all sessions for these users so they get kicked immediately
-            from django.contrib.sessions.models import Session
-            from django.utils import timezone
-            for session in Session.objects.filter(expire_date__gte=timezone.now()):
-                data = session.get_decoded()
-                uid = data.get('_auth_user_id')
-                if uid and client_users.filter(id=uid).exists():
-                    session.delete()
+            status_obj, _ = ClientOffboardingStatus.objects.get_or_create(client=client_obj, step=step_def)
+
+            # If it's step 1 and it's a POST with a file
+            if step_num == 1 and request.method == "POST" and request.body:
+                filename = request.headers.get('X-Filename', 'uploaded_document.pdf')
+                # we could save the file, but for now we just record the name
+                status_obj.document_path = filename
+
+                from admin_panel.models import ClientDocument
+                from django.core.files.base import ContentFile
+                doc = ClientDocument.objects.create(
+                    client=client_obj,
+                    document_name="Termination Notice",
+                    original_filename=filename,
+                    document_type="Offboarding Step 1",
+                    file_size=len(request.body),
+                    uploaded_by="Admin User"
+                )
+                doc.file.save(filename, ContentFile(request.body), save=True)
+
+            status_obj.status = 'COMPLETED'
+            status_obj.save()
+
+            if step_num == 3:
+                client_obj.status = 'INACTIVE'
+                client_obj.stage = 'offboarded'
+                client_obj.save()
+
+                # Deactivate all users belonging to this client
+                from accounts.models import User as AccountUser
+                client_users = AccountUser.objects.filter(client=client_obj, is_staff=False, is_superuser=False)
+                client_user_ids = {str(uid) for uid in client_users.values_list('id', flat=True)}
+                client_users.update(is_active=False)
+
+                # Flush all sessions for these users so they get kicked immediately
+                from django.contrib.sessions.models import Session
+                from django.utils import timezone
+                session_pks_to_delete = []
+                for session in Session.objects.filter(expire_date__gte=timezone.now()).iterator():
+                    uid = session.get_decoded().get('_auth_user_id')
+                    if uid and uid in client_user_ids:
+                        session_pks_to_delete.append(session.pk)
+                if session_pks_to_delete:
+                    Session.objects.filter(pk__in=session_pks_to_delete).delete()
 
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)

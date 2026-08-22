@@ -145,3 +145,6 @@ class ClientStepComment(models.Model):
     class Meta:
         db_table = "client_step_comment"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["client", "step_number", "-created_at"]),
+        ]

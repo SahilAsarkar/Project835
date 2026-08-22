@@ -103,10 +103,11 @@ def tracked_files_list(request):
 
     client = getattr(request.user, "client", None)
     if request.user.is_staff:
-        records = EDI835File.objects.all().order_by('-uploaded_at')[:200]
+        records = EDI835File.objects.select_related("client").order_by('-uploaded_at')[:200]
     else:
         records = EDI835File.objects.filter(client=client).order_by('-uploaded_at')[:200]
     data = []
+    records_to_update = []
     for r in records:
         in_sftp = r.present_in_sftp
         if not in_sftp:
@@ -130,7 +131,7 @@ def tracked_files_list(request):
         if r.present_in_sftp != in_sftp or r.present_in_archive_folder != in_archive:
             r.present_in_sftp = in_sftp
             r.present_in_archive_folder = in_archive
-            r.save(update_fields=["present_in_sftp", "present_in_archive_folder"])
+            records_to_update.append(r)
 
         data.append({
             "id": str(r.id),
@@ -153,6 +154,10 @@ def tracked_files_list(request):
             "present_in_archive_folder": in_archive,
             "ingestion_source": r.ingestion_source or "MANUAL",
         })
+    if records_to_update:
+        EDI835File.objects.bulk_update(
+            records_to_update, ["present_in_sftp", "present_in_archive_folder"]
+        )
     return JsonResponse({"files": data})
 
 

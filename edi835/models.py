@@ -107,6 +107,10 @@ class EDI835File(models.Model):
         verbose_name = "835File"
         verbose_name_plural = "835Files"
         ordering = ["-uploaded_at"]
+        indexes = [
+            models.Index(fields=["client", "-uploaded_at"]),
+            models.Index(fields=["status"]),
+        ]
 
     def __str__(self):
         return f"{self.original_filename} ({self.id})"

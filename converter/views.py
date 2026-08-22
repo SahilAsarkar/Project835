@@ -1,8 +1,11 @@
 import json
 import os
+import logging
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+
+logger = logging.getLogger("converter")
 
 from converter.services.parser import parse_835_to_mir
 from converter.services.validator import EDI835Validator
@@ -346,6 +349,7 @@ def api_validate(request):
             'report': report
         })
     except Exception as err:
+        logger.exception(f"Local validation error for file '{original_filename}': {str(err)}")
         db_rec = EDI835File.objects.create(
             original_filename=original_filename,
             stored_filename=original_filename,

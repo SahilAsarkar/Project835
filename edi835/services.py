@@ -1,6 +1,7 @@
 import os
 import shutil
 import uuid
+import logging
 from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
@@ -9,6 +10,9 @@ from django.db import models
 from .models import EDI835File
 from .parser import parse_835_to_mir, EDI835Validator
 from .mir_exporter import export_mir_file
+
+logger = logging.getLogger("edi835")
+
 
 
 def get_edi835_storage_dirs():
@@ -129,7 +133,7 @@ def push_file_record_to_sftp(file_id):
     """
     from .models import SFTPConfig, EDI835File
     try:
-        rec = EDI835File.objects.get(id=file_id)
+        rec = EDI835File.objects.select_related("client").get(id=file_id)
     except (EDI835File.DoesNotExist, ValueError):
         return False, "File record not found in database."
 
@@ -198,7 +202,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
     file_uuid = uuid.uuid4()
     if file_id:
         try:
-            db_record = EDI835File.objects.get(id=file_id)
+            db_record = EDI835File.objects.select_related("client").get(id=file_id)
             file_uuid = db_record.id
         except (EDI835File.DoesNotExist, ValueError):
             db_record = None
@@ -284,6 +288,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
 
     except Exception as err:
         err_str = str(err)
+        logger.exception(f"EDI 835 processing failed for file '{stored_filename}': {err_str}")
 
         # Step 6: On error, move file from processing/ to error/ folder
         error_file_path = dirs["error"] / stored_filename
@@ -424,28 +429,38 @@ def sync_folder_observer():
 
     # 1. Scan input folder for untracked files dropped into SFTP/input directory
     if os.path.exists(input_dir):
-        for fname in os.listdir(input_dir):
-            file_path = input_dir / fname
-            if os.path.isfile(file_path):
-                # Check if already tracked by original_filename or stored_filename
-                exists = EDI835File.objects.filter(
-                    models.Q(original_filename=fname) | models.Q(stored_filename=fname)
-                ).exists()
-                if not exists:
-                    rel_input_path = (Path("media") / "edi835" / "input" / fname).as_posix()
-                    EDI835File.objects.create(
-                        original_filename=fname,
-                        stored_filename=fname,
-                        status="UPLOADED",
-                        input_path=rel_input_path,
-                        present_in_sftp=True,
-                        present_in_archive_folder=False,
-                        ingestion_source="SFTP",
-                    )
+        untracked_fnames = [
+            fname for fname in os.listdir(input_dir)
+            if os.path.isfile(input_dir / fname)
+        ]
+        if untracked_fnames:
+            existing_names = set()
+            for orig, stored in EDI835File.objects.filter(
+                models.Q(original_filename__in=untracked_fnames)
+                | models.Q(stored_filename__in=untracked_fnames)
+            ).values_list("original_filename", "stored_filename"):
+                if orig:
+                    existing_names.add(orig)
+                if stored:
+                    existing_names.add(stored)
+
+            for fname in untracked_fnames:
+                if fname in existing_names:
+                    continue
+                rel_input_path = (Path("media") / "edi835" / "input" / fname).as_posix()
+                EDI835File.objects.create(
+                    original_filename=fname,
+                    stored_filename=fname,
+                    status="UPLOADED",
+                    input_path=rel_input_path,
+                    present_in_sftp=True,
+                    present_in_archive_folder=False,
+                    ingestion_source="SFTP",
+                )
 
     # 2. Sync physical disk existence for all DB records
-    records = EDI835File.objects.all()
-    for r in records:
+    to_update = []
+    for r in EDI835File.objects.all().iterator():
         in_sftp = r.present_in_sftp
         if not in_sftp:
             if r.output_path and os.path.exists(Path(settings.BASE_DIR) / r.output_path):
@@ -468,5 +483,8 @@ def sync_folder_observer():
         if r.present_in_sftp != in_sftp or r.present_in_archive_folder != in_archive:
             r.present_in_sftp = in_sftp
             r.present_in_archive_folder = in_archive
-            r.save(update_fields=["present_in_sftp", "present_in_archive_folder"])
+            to_update.append(r)
+
+    if to_update:
+        EDI835File.objects.bulk_update(to_update, ["present_in_sftp", "present_in_archive_folder"])
 

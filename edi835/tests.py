@@ -31,19 +31,20 @@ class EDI835PipelineLifecycleTestCase(TestCase):
 
         self.assertTrue(res["success"])
         db_rec = res["db_record"]
+        stored_name = db_rec.stored_filename
 
         # Check DB tracking properties
         self.assertEqual(db_rec.status, "ARCHIVED")
         self.assertEqual(db_rec.original_filename, original_name)
-        self.assertEqual(db_rec.stored_filename, original_name)
+        self.assertTrue(db_rec.stored_filename.endswith(original_name))
 
         # Verify folder states after successful completion:
         # 1. input/ folder is empty
-        input_file = self.dirs["input"] / original_name
+        input_file = self.dirs["input"] / stored_name
         self.assertFalse(os.path.exists(input_file))
 
         # 2. processing/ folder is empty
-        proc_file = self.dirs["processing"] / original_name
+        proc_file = self.dirs["processing"] / stored_name
         self.assertFalse(os.path.exists(proc_file))
 
         # 3. output/ folder has converted .mir file using uploaded base name
@@ -51,7 +52,7 @@ class EDI835PipelineLifecycleTestCase(TestCase):
         self.assertTrue(os.path.exists(out_mir))
 
         # 4. archive/ folder contains ONLY the x12/835 file (no .mir file in archive/)
-        arch_835 = self.dirs["archive"] / original_name
+        arch_835 = self.dirs["archive"] / stored_name
         arch_mir = self.dirs["archive"] / "TEST_RUN_FILE.mir"
         self.assertTrue(os.path.exists(arch_835))
         self.assertFalse(os.path.exists(arch_mir))
@@ -62,17 +63,18 @@ class EDI835PipelineLifecycleTestCase(TestCase):
 
         self.assertFalse(res["success"])
         db_rec = res["db_record"]
+        stored_name = db_rec.stored_filename
 
         # Check DB status is ERROR
         self.assertEqual(db_rec.status, "ERROR")
 
         # Verify folder states after error:
         # 1. input/ and processing/ are empty
-        self.assertFalse(os.path.exists(self.dirs["input"] / original_name))
-        self.assertFalse(os.path.exists(self.dirs["processing"] / original_name))
+        self.assertFalse(os.path.exists(self.dirs["input"] / stored_name))
+        self.assertFalse(os.path.exists(self.dirs["processing"] / stored_name))
 
         # 2. error/ folder contains the failed file with original filename
-        err_file = self.dirs["error"] / original_name
+        err_file = self.dirs["error"] / stored_name
         self.assertTrue(os.path.exists(err_file))
 
     def test_multiple_files_single_mir(self):

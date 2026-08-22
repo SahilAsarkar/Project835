@@ -116,6 +116,9 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['client', '-timestamp']),
+        ]
 
     def __str__(self):
         return f"[{self.module}] {self.action} by {self.performed_by} at {self.timestamp}"
@@ -136,6 +139,9 @@ class ClientDocument(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['client', 'document_type', '-created_at']),
+        ]
 
     def __str__(self):
         return f"{self.document_name} ({self.client.name})"
