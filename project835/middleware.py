@@ -26,9 +26,9 @@ class AdminAccessMiddleware:
                 )
 
         # Protect all admin-panel api calls and UI paths (administrator/mapping)
-        if path.startswith('/admin-panel/') or path.startswith('/administrator') or path.startswith('/mapping'):
+        if path.startswith('/admin-panel/') or path.startswith('/administrator') or path.startswith('/mapping') or path.startswith('/accounts/api/admin/'):
             if not request.user.is_authenticated or not request.user.is_staff:
-                if '/api/' in path:
+                if '/api/' in path or '/api/' in request.path.lower():
                     return JsonResponse({"success": False, "error": "Access denied. Administrative privileges required."}, status=403)
                 return HttpResponseForbidden("Access Denied: Standard users cannot access administrative paths.")
             

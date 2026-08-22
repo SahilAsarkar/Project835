@@ -6,6 +6,13 @@ from accounts.models import Client, User
 class AdminClientApiTestCase(TestCase):
     def setUp(self):
         self.client_api = DjangoTestClient()
+        self.admin_user = User.objects.create_superuser(
+            email="admin@example.com",
+            name="Admin User",
+            mobile="+15551111",
+            password="adminpassword"
+        )
+        self.client_api.login(email="admin@example.com", password="adminpassword")
         self.c1 = Client.objects.create(
             name="Alpha Health",
             client_code="CLT-ALPHA",

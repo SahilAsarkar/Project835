@@ -17,8 +17,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from home.views import home_view
+from project835.views import health_check
 
 urlpatterns = [
+    path("health/", health_check, name="health_check"),
     path("admin/", admin.site.urls),
     path("administrator/", home_view, name="administrator_route"),
     path("administrator", home_view),
