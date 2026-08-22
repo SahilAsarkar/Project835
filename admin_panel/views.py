@@ -71,8 +71,42 @@ def api_admin_clients(request):
     active_clients = Client.objects.filter(status="ACTIVE").count()
     inactive_clients = Client.objects.filter(status="INACTIVE").count()
 
+    from django.utils import timezone
+    now = timezone.now()
+
+    total_onboarding_steps = OnboardingStepDefinition.objects.count()
+    total_golive_steps = GoLiveStepDefinition.objects.count()
+    if total_golive_steps == 0:
+        total_golive_steps = 6
+
     clients_data = []
     for c in clients_qs:
+        completed_onboarding = c.onboarding_steps.filter(status='COMPLETED').count()
+        onboarding_incomplete = completed_onboarding < total_onboarding_steps
+        
+        completed_golive = c.golive_steps.filter(status='COMPLETED').count()
+        go_live_completed = (completed_golive == total_golive_steps)
+
+        dynamic_stage = c.stage
+        if onboarding_incomplete:
+            completed_steps = set(c.onboarding_steps.filter(status='COMPLETED').values_list('step__step_number', flat=True))
+            in_progress_step = 1
+            for num in range(1, total_onboarding_steps + 1):
+                if num not in completed_steps:
+                    in_progress_step = num
+                    break
+            if in_progress_step == 13:
+                dynamic_stage = "go_live_pending"
+            else:
+                dynamic_stage = f"onboarding_step_{in_progress_step}"
+        elif go_live_completed and c.live_since:
+            if c.live_since > now:
+                dynamic_stage = "production_pending"
+            else:
+                dynamic_stage = "production"
+        else:
+            dynamic_stage = "onboarding_completed"
+
         clients_data.append({
             "id": str(c.id),
             "name": c.name,
@@ -82,7 +116,7 @@ def api_admin_clients(request):
             "phone": c.phone or "",
             "address": c.address or "",
             "status": c.status,
-            "stage": c.stage,
+            "stage": dynamic_stage,
             "claims_system": c.claims_system,
             "owner": c.owner,
             "progress_pct": c.progress_pct,
@@ -623,9 +657,8 @@ def api_admin_client_state(request, client_id):
             (10, "Test conversions reviewed with client", "Verify side-by-side conversion of sample 835 files."),
             (11, "Send test file to client FTP", "Transmit verified test payload to client FTP server."),
             (12, "Upload email conversation attachment", "Attach email confirmation."),
-            (13, "Set schedule", "Set scheduled date and time for live production cutover."),
-            (14, "Go live checklist & controls verified", "Confirm production cutover safeguards and monitoring."),
-            (15, "First production file delivered & monitored", "Monitor first live 835 delivery and conclude onboarding."),
+            (13, "Go live checklist & controls verified", "Confirm production cutover safeguards and monitoring."),
+            (14, "First production file delivered & monitored", "Monitor first live 835 delivery and conclude onboarding."),
         ]
         for num, title, desc in default_steps:
             OnboardingStepDefinition.objects.create(step_number=num, title=title, description=desc)
@@ -646,9 +679,8 @@ def api_admin_client_state(request, client_id):
         10: "side_by_side_done",
         11: "send_ftp_action",
         12: "email_upload",
-        13: "schedule_action",
-        14: "text_submission",
-        15: "text_submission_final",
+        13: "golive_redirect",
+        14: "text_submission_final",
     }
 
     def get_phase(step_number):
@@ -666,7 +698,15 @@ def api_admin_client_state(request, client_id):
         st = status_map.get(step.id, 'PENDING')
         
         is_done = st == 'COMPLETED'
-        is_in_progress = st == 'IN_PROGRESS'
+        
+        # Override Step 13 completion based on Go-Live steps
+        if step.step_number == 13:
+            total_golive = GoLiveStepDefinition.objects.count()
+            if total_golive == 0: total_golive = 6
+            completed_golive = ClientGoLiveStatus.objects.filter(client=client_obj, status='COMPLETED').count()
+            is_done = (completed_golive == total_golive)
+            
+        is_in_progress = st == 'IN_PROGRESS' or (step.step_number == 13 and not is_done)
         
         if is_in_progress:
             in_progress_found = True
@@ -685,6 +725,14 @@ def api_admin_client_state(request, client_id):
                 {**u, "role": "Admin" if u.get("is_staff") else "User"} 
                 for u in users
             ]
+        elif step.step_number == 13:
+            if client_obj.live_since:
+                from django.utils.timezone import localtime
+                local_dt = localtime(client_obj.live_since)
+                extra_data["schedule"] = {
+                    "scheduled_date": local_dt.strftime("%Y-%m-%d"),
+                    "scheduled_time": local_dt.strftime("%H:%M")
+                }
             
         steps_data.append({
             "id": step.step_number,
@@ -982,11 +1030,11 @@ def api_admin_step_action(request, client_id, step_key, action):
                     return JsonResponse({'success': False, 'error': f'SMTP save failed: {smtp_err}'}, status=400)
             # ─────────────────────────────────────────────────────────────────
 
-            if action == "save" and step_num in [5, 10]:
+            if (action == "save" and step_num in [5, 10]) or (action == "send" and step_num == 11) or action == "submit-text":
                 from accounts.models import ClientStepComment
                 try:
                     data = json.loads(request.body.decode('utf-8'))
-                    verification_text = data.get('verification_text', '').strip()
+                    verification_text = data.get('verification_text') or data.get('notes', '').strip() or data.get('submission_text', '').strip()
                     if verification_text:
                         author = "System"
                         if request.user and hasattr(request.user, "name") and request.user.name:
@@ -1018,6 +1066,42 @@ def api_admin_step_action(request, client_id, step_key, action):
                         ok_phone, err_phone = validate_phone_number(phone)
                         if not ok_phone:
                             return JsonResponse({"success": False, "error": err_phone}, status=400)
+                except Exception:
+                    pass
+
+            if action == "save" and step_num == 13:
+                try:
+                    body = json.loads(request.body.decode('utf-8'))
+                    scheduled_date = body.get('scheduled_date', '').strip()
+                    scheduled_time = body.get('scheduled_time', '10:00').strip()
+                    notes = body.get('notes', '').strip()
+                    
+                    if notes:
+                        from accounts.models import ClientStepComment
+                        author = "System"
+                        if request.user and hasattr(request.user, "name") and request.user.name:
+                            author = request.user.name
+                        elif request.user and hasattr(request.user, "email") and request.user.email:
+                            author = request.user.email
+                        ClientStepComment.objects.create(
+                            client=client_obj,
+                            step_number=step_num,
+                            comment=notes,
+                            author=author
+                        )
+
+                    if scheduled_date:
+                        from datetime import datetime
+                        from django.utils import timezone
+                        try:
+                            if "-" in scheduled_date and len(scheduled_date.split("-")[0]) == 4:
+                                dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
+                            else:
+                                dt = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%m-%d-%Y %H:%M")
+                            client_obj.live_since = timezone.make_aware(dt)
+                            client_obj.save()
+                        except ValueError:
+                            pass
                 except Exception:
                     pass
 
@@ -1311,6 +1395,32 @@ def helper_get_golive_state(client_obj):
         if is_in_progress:
             in_progress_found = True
 
+        extra_data = {}
+        latest_note = None
+        
+        if step.step_number == 4:
+            if client_obj.live_since:
+                from django.utils.timezone import localtime
+                local_dt = localtime(client_obj.live_since)
+                extra_data["schedule"] = {
+                    "production_date": local_dt.strftime("%Y-%m-%d"),
+                    "production_time": local_dt.strftime("%H:%M")
+                }
+            from accounts.models import ClientStepComment
+            note = ClientStepComment.objects.filter(client=client_obj, step_number=104).order_by('-created_at').first()
+            if note:
+                extra_data["schedule"] = extra_data.get("schedule", {})
+                extra_data["schedule"]["notes"] = note.comment
+                
+        if step.step_number == 5:
+            from accounts.models import ClientStepComment
+            note = ClientStepComment.objects.filter(client=client_obj, step_number=105).order_by('-created_at').first()
+            if note:
+                latest_note = {
+                    "note_text": note.comment,
+                    "author": note.author
+                }
+
         steps_data.append({
             "id": step.id,
             "step_number": step.step_number,
@@ -1319,7 +1429,8 @@ def helper_get_golive_state(client_obj):
             "done": is_done,
             "inProgress": is_in_progress,
             "file": step.step_number in [1, 2],
-            "extra": {}
+            "extra": extra_data,
+            "latestNote": latest_note
         })
 
     if not in_progress_found:
@@ -1441,6 +1552,39 @@ def api_admin_golive_step4_schedule(request, client_id):
     """ POST /admin-panel/api/clients/<client_id>/golive/steps/4/schedule/ """
     try:
         client_obj = Client.objects.get(id=client_id)
+        
+        body = json.loads(request.body.decode('utf-8'))
+        production_date = body.get('production_date', '').strip()
+        production_time = body.get('production_time', '10:00').strip()
+        notes = body.get('notes', '').strip()
+        
+        if notes:
+            from accounts.models import ClientStepComment
+            author = "System"
+            if request.user and hasattr(request.user, "name") and request.user.name:
+                author = request.user.name
+            elif request.user and hasattr(request.user, "email") and request.user.email:
+                author = request.user.email
+            ClientStepComment.objects.create(
+                client=client_obj,
+                step_number=104,
+                comment=notes,
+                author=author
+            )
+
+        if production_date:
+            from datetime import datetime
+            from django.utils import timezone
+            try:
+                if "-" in production_date and len(production_date.split("-")[0]) == 4:
+                    dt = datetime.strptime(f"{production_date} {production_time}", "%Y-%m-%d %H:%M")
+                else:
+                    dt = datetime.strptime(f"{production_date} {production_time}", "%m-%d-%Y %H:%M")
+                client_obj.live_since = timezone.make_aware(dt)
+                client_obj.save()
+            except ValueError:
+                pass
+                
         step_def, _ = GoLiveStepDefinition.objects.get_or_create(step_number=4, defaults={"title": "Production Schedule"})
         status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
         status_obj.status = 'COMPLETED'
@@ -1464,6 +1608,24 @@ def api_admin_golive_step5_comment(request, client_id):
     """ POST /admin-panel/api/clients/<client_id>/golive/steps/5/comment/ """
     try:
         client_obj = Client.objects.get(id=client_id)
+        
+        body = json.loads(request.body.decode('utf-8'))
+        comment_text = body.get('comment', '').strip()
+        
+        if comment_text:
+            from accounts.models import ClientStepComment
+            author = "System"
+            if request.user and hasattr(request.user, "name") and request.user.name:
+                author = request.user.name
+            elif request.user and hasattr(request.user, "email") and request.user.email:
+                author = request.user.email
+            ClientStepComment.objects.create(
+                client=client_obj,
+                step_number=105,
+                comment=comment_text,
+                author=author
+            )
+            
         step_def, _ = GoLiveStepDefinition.objects.get_or_create(step_number=5, defaults={"title": "Special Comment"})
         status_obj, _ = ClientGoLiveStatus.objects.get_or_create(client=client_obj, step=step_def)
         status_obj.status = 'COMPLETED'

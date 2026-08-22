@@ -137,6 +137,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
   const [s11Password, setS11Password] = useState('');
   const [s11Security, setS11Security] = useState('STARTTLS');
   const [s11ReplyTo, setS11ReplyTo] = useState('');
+  const [s11Notes, setS11Notes] = useState('');
   const [s11Sending, setS11Sending] = useState(false);
   const [s11Loaded, setS11Loaded] = useState(false);
   const [s11HasPassword, setS11HasPassword] = useState(false);
@@ -307,6 +308,19 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
     }
   };
 
+  const handleStep10Save = async () => {
+    if (!s10Notes.trim()) { 
+      setFeedback({ isOpen: true, kind: 'bad', title: 'Input Required', content: 'Please enter verification text.', checks: [] }); 
+      return; 
+    }
+    try {
+      await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_10_test_review/save/`, { verification_text: s10Notes });
+      await onRefresh();
+    } catch (err) { 
+      setFeedback({ isOpen: true, kind: 'bad', title: 'Submission Error', content: err.message, checks: [] }); 
+    }
+  };
+
   const handleStep6Save = async (sftpConfigOverride = null) => {
     if (s6Method === 'HTTPS API') {
       setS6ApiTouched(true);
@@ -452,7 +466,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
           </div>
         )}
 
-        {step.latestNote && (
+        {step.latestNote && step.id !== 5 && step.id !== 10 && step.id !== 11 && step.id !== 13 && step.id !== 14 && step.id !== 15 && (
           <div className="ev" style={{ color: 'var(--ochre)' }}>
             Note: "{step.latestNote.note_text}" — <i>{step.latestNote.author}</i>
           </div>
@@ -643,7 +657,15 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
             )}
 
             {step.actionType === 'claim_verify' && (
-              <div className="step-custom-box" style={{ padding: '8px 12px' }}>
+              <div className="step-custom-box" style={{ padding: '8px 12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                {step.done && step.latestNote && (
+                  <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Current Claim System Verification</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                      <div><b>Note:</b> {step.latestNote.note_text}</div>
+                    </div>
+                  </div>
+                )}
                 <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Claim System Verification Information</label>
                 <textarea rows={1} style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }} value={s5Text} onChange={(e) => setS5Text(e.target.value)} placeholder="e.g. Vendor hosted ClaimsCore Enterprise, SFTP outbound nightly 835 drops verified." />
                 <div style={{ marginTop: 6, textAlign: 'right' }}>
@@ -898,36 +920,33 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
             )}
 
             {step.actionType === 'side_by_side_done' && (
-              <div className="step-custom-box" style={{ padding: '8px 12px' }}>
-                <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Side-by-Side 835 Conversion Review Notes *
-                </label>
-                <textarea
-                  rows={1}
-                  style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }}
-                  placeholder="e.g. Verified side-by-side 835 conversion claim totals CLP, BPR, and TRN against MIR format."
-                  value={s10Notes}
-                  onChange={(e) => setS10Notes(e.target.value)}
-                />
+              <div className="step-custom-box" style={{ padding: '8px 12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                {step.done && step.latestNote && (
+                  <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Current Side-by-Side 835 Conversion Review Notes</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                      <div><b>Note:</b> {step.latestNote.note_text}</div>
+                    </div>
+                  </div>
+                )}
+                <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Side-by-Side 835 Conversion Review Notes</label>
+                <textarea rows={1} style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }} value={s10Notes} onChange={(e) => setS10Notes(e.target.value)} placeholder="e.g. Verified side-by-side 835 conversion claim totals CLP, BPR, and TRN against MIR format." />
                 <div style={{ marginTop: 6, textAlign: 'right' }}>
-                  <button className="btn tiny primary" onClick={async () => {
-                    if (!s10Notes.trim()) { 
-                      setFeedback({ isOpen: true, kind: 'bad', title: 'Evidence Required', content: 'Step 10 Evidence Required: Please enter side-by-side 835 conversion review notes.', checks: [] }); 
-                      return; 
-                    }
-                    try {
-                      await postStepData(`/clients/${encodeURIComponent(clientId)}/steps/step_10_test_review/save/`, { verification_text: s10Notes });
-                      onRefresh();
-                    } catch (err) { 
-                      setFeedback({ isOpen: true, kind: 'bad', title: 'Submission Error', content: err.message, checks: [] }); 
-                    }
-                  }}>Submit &amp; Complete Step 10</button>
+                  <button className="btn tiny primary" onClick={handleStep10Save}>Submit &amp; Complete Step 10</button>
                 </div>
               </div>
             )}
 
             {step.actionType === 'send_ftp_action' && (
               <div className="step-custom-box" style={{ padding: '12px 14px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                {step.done && step.latestNote && (
+                  <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Current SMTP / Email Config Notes</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                      <div><b>Note:</b> {step.latestNote.note_text}</div>
+                    </div>
+                  </div>
+                )}
                 <div style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ink-2)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   SMTP / Email Configuration
                 </div>
@@ -1034,6 +1053,18 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                     />
                   </div>
                 </div>
+                
+                {/* Row 5: Notes */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', marginBottom: '3px', letterSpacing: '0.05em' }}>Verification Notes / Comments <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span></div>
+                  <textarea
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', boxSizing: 'border-box', resize: 'vertical', minHeight: '28px' }}
+                    rows={1}
+                    value={s11Notes}
+                    onChange={e => setS11Notes(e.target.value)}
+                    placeholder="Enter any notes or special configuration details..."
+                  />
+                </div>
 
                 {/* Action button */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1059,7 +1090,7 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
                         // 2. Trigger email notification + mark step complete
                         const res = await postStepData(
                           `/clients/${encodeURIComponent(clientId)}/steps/step_11_send_ftp/send/`,
-                          { ...smtpPayload }
+                          { ...smtpPayload, notes: s11Notes.trim() }
                         );
                         setFeedback({
                           isOpen: true,
@@ -1093,6 +1124,16 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
 
             {step.actionType === 'schedule_action' && (
               <div className="step-custom-box" style={{ padding: '8px 12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)', marginTop: '8px' }}>
+                {step.done && (step.extra?.schedule || step.latestNote) && (
+                  <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Current Schedule Configuration</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                      <div style={{ marginBottom: '4px' }}><b>Date:</b> {formatToMMDDYYYY(step.extra?.schedule?.scheduled_date) || 'N/A'}</div>
+                      <div style={{ marginBottom: '4px' }}><b>Time (EST):</b> {step.extra?.schedule?.scheduled_time || 'N/A'}</div>
+                      <div><b>Notes:</b> {step.latestNote?.note_text || 'None'}</div>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>Date *:</label>
@@ -1197,12 +1238,39 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
               </div>
             )}
 
+            {step.actionType === 'golive_redirect' && (
+              <div className="step-custom-box" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                <div><b>Go-Live Administration:</b> Manage cutover authorization, endpoints, and exceptions.</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button 
+                    type="button" 
+                    className={`btn tiny ${step.done ? 'success' : 'primary'}`} 
+                    onClick={() => {
+                      window.location.href = `?nav=promote&client=${encodeURIComponent(clientId)}`;
+                    }}
+                  >
+                    Setup Go Live ↗
+                  </button>
+                </div>
+              </div>
+            )}
+
             {(step.actionType === 'text_submission' || step.actionType === 'text_submission_final') && (
-              <div className="step-custom-box">
-                <label style={{ fontWeight: 600, fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  {step.actionType === 'text_submission_final' ? 'Production Delivery Sign-Off Notes:' : 'Go-Live Safeguards Verification:'}
+              <div className="step-custom-box" style={{ padding: '8px 12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                {step.done && step.latestNote && (
+                  <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                      {step.actionType === 'text_submission_final' ? 'Current Production Delivery Sign-Off Notes' : 'Current Go-Live Safeguards Verification'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                      <div><b>Note:</b> {step.latestNote.note_text}</div>
+                    </div>
+                  </div>
+                )}
+                <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {step.actionType === 'text_submission_final' ? 'Production Delivery Sign-Off Notes' : 'Go-Live Safeguards Verification'}
                 </label>
-                <textarea rows={2} style={{ width: '100%', padding: 6, border: '1px solid var(--line)', fontSize: 12.5 }} placeholder={step.actionType === 'text_submission_final' ? 'First production file delivered and monitored without error.' : 'All cutover checks and security safeguards passed.'} value={stText} onChange={(e) => setStText(e.target.value)} />
+                <textarea rows={1} style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }} placeholder={step.actionType === 'text_submission_final' ? 'First production file delivered and monitored without error.' : 'All cutover checks and security safeguards passed.'} value={stText} onChange={(e) => setStText(e.target.value)} />
                 <div style={{ marginTop: 6, textAlign: 'right' }}>
                   <button className="btn tiny primary" onClick={handleTextSubmission}>
                     {step.actionType === 'text_submission_final' ? 'Conclude Onboarding' : `Submit & Complete Step ${step.id}`}

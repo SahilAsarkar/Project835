@@ -30,6 +30,13 @@ function getStageBadge(stage) {
   if (s === 'onboarding_completed' || s === 'onboarding_complete') {
     return <span className="tag blue">Onboarding Completed</span>;
   }
+  if (s === 'go_live_incomplete' || s === 'golive_incomplete') {
+    return <span className="tag work">Go Live Incomplete</span>;
+  }
+  if (s.startsWith('onboarding_step_')) {
+    const stepNum = s.split('_').pop();
+    return <span className="tag work">Step {stepNum} In Progress</span>;
+  }
   return <span className="tag work">Onboarding Pending</span>;
 }
 
@@ -38,25 +45,22 @@ export default function ClientsTable({ clients = [], onSelectClient, onOpenAddCl
   const [searchTerm, setSearchTerm] = useState('');
 
   // Real-time metric counters driven by database state
+  const totalCount = clients.length;
+  const inOnbCount = clients.filter(c => {
+    const s = (c.stage || '').toLowerCase().replace(/[\s-]/g, '_');
+    return s.startsWith('onboarding_step_') || s === 'onboarding_pending';
+  }).length;
+  const preFlightCount = clients.filter(c => {
+    const s = (c.stage || '').toLowerCase().replace(/[\s-]/g, '_');
+    return s === 'onboarding_completed' || s === 'golive_pending' || s === 'go_live_pending' || s === 'production_pending';
+  }).length;
   const prodCount = clients.filter(c => (c.stage || '').toLowerCase() === 'production').length;
-  const prodPendingCount = clients.filter(c => {
-    const s = (c.stage || '').toLowerCase().replace(/[\s-]/g, '_');
-    return s === 'production_pending';
-  }).length;
-  const goliveCount = clients.filter(c => {
-    const s = (c.stage || '').toLowerCase().replace(/[\s-]/g, '_');
-    return s === 'golive_pending' || s === 'go_live_pending';
-  }).length;
-  const onbDoneCount = clients.filter(c => {
-    const s = (c.stage || '').toLowerCase().replace(/[\s-]/g, '_');
-    return s === 'onboarding_completed';
-  }).length;
 
   // Filter clients dynamically by stage and search input
   const filteredClients = clients.filter((c) => {
     const s = (c.stage || '').toLowerCase().replace(/[\s-]/g, '_');
     let matchesStage = true;
-    if (filterStage === 'onboarding_pending') matchesStage = s === 'onboarding_pending' || s === 'onboarding';
+    if (filterStage === 'onboarding_pending') matchesStage = s === 'onboarding_pending' || s === 'onboarding' || s.startsWith('onboarding_step_');
     else if (filterStage === 'onboarding_completed') matchesStage = s === 'onboarding_completed';
     else if (filterStage === 'golive_pending') matchesStage = s === 'golive_pending' || s === 'go_live_pending';
     else if (filterStage === 'production_pending') matchesStage = s === 'production_pending';
@@ -93,24 +97,24 @@ export default function ClientsTable({ clients = [], onSelectClient, onOpenAddCl
       {/* Database KPI Metric Cards */}
       <div className="metrics">
         <div className="metric">
+          <div className="v" id="stat-total">{totalCount}</div>
+          <div className="l">Total Tenants</div>
+          <div className="d">Active Accounts in Registry</div>
+        </div>
+        <div className="metric">
+          <div className="v" id="stat-onb">{inOnbCount}</div>
+          <div className="l">In Onboarding</div>
+          <div className="d">Completing Initial Setup</div>
+        </div>
+        <div className="metric">
+          <div className="v" id="stat-golive">{preFlightCount}</div>
+          <div className="l">Go-Live &amp; Pre-Flight</div>
+          <div className="d">Verified &amp; Cutover Scheduled</div>
+        </div>
+        <div className="metric">
           <div className="v" id="stat-prod">{prodCount}</div>
           <div className="l">In Production</div>
           <div className="d">Delivering MIR to MPL</div>
-        </div>
-        <div className="metric">
-          <div className="v" id="stat-prod-pending">{prodPendingCount}</div>
-          <div className="l">Production Pending</div>
-          <div className="d">Cutover Window Scheduled</div>
-        </div>
-        <div className="metric">
-          <div className="v" id="stat-golive">{goliveCount}</div>
-          <div className="l">Go Live Pending</div>
-          <div className="d">Verified &amp; In Pre-Flight</div>
-        </div>
-        <div className="metric">
-          <div className="v" id="stat-onb-done">{onbDoneCount}</div>
-          <div className="l">Onboarding Completed</div>
-          <div className="d">Ready for Pre-Flight Go Live</div>
         </div>
       </div>
 

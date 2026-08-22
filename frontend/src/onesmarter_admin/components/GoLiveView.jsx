@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ClientSelectDropdown from './ClientSelectDropdown';
+import ClientSftpModal from './ClientSftpModal';
 import {
   fetchGoLiveState, uploadGoLiveDoc, downloadGoLiveTemplate,
   saveGoLiveSFTP, saveGoLiveSchedule, saveGoLiveComment,
@@ -50,10 +51,12 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
 
   // Step 3 SFTP
   const [sftpSameAsTest, setSftpSameAsTest] = useState(false);
+  const [showSftpModal, setShowSftpModal] = useState(false);
 
   // Step 4 Schedule
   const [productionDate, setProductionDate] = useState('');
   const [productionTime, setProductionTime] = useState('');
+  const [productionNotes, setProductionNotes] = useState('');
   const step4DatePickerRef = useRef(null);
 
   // Step 5 Comment
@@ -96,6 +99,7 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
       if (step4?.extra?.schedule) {
         setProductionDate(formatToMMDDYYYY(step4.extra.schedule.production_date) || '');
         setProductionTime(step4.extra.schedule.production_time || '');
+        setProductionNotes(step4.extra.schedule.notes || '');
       }
 
       const step5 = state.steps.find(s => s.step_number === 5);
@@ -193,7 +197,7 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
     setErrorMessage('');
     setSuccessMessage('');
     try {
-      const newState = await saveGoLiveSchedule(selectedClientId, productionDate.trim(), productionTime.trim());
+      const newState = await saveGoLiveSchedule(selectedClientId, productionDate.trim(), productionTime.trim(), productionNotes.trim());
       setGoliveState(newState);
       setSuccessMessage(`Step 4: Production Schedule set for ${productionDate} ${productionTime ? `at ${productionTime}` : '(time TBD)'}.`);
       if (onClientUpdated) {
@@ -207,7 +211,11 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
   }
 
   async function handleSaveStep5Comment(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!specialComment.trim()) {
+      setFeedback({ isOpen: true, kind: 'bad', title: 'Input Required', content: 'Please enter verification text.', checks: [] });
+      return;
+    }
     setActionLoading(true);
     setErrorMessage('');
     setSuccessMessage('');
@@ -364,7 +372,7 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                   )}
 
                   {/* Latest Note Evidence */}
-                  {step.latestNote && (
+                  {step.latestNote && step.step_number !== 4 && step.step_number !== 5 && (
                     <div className="ev" style={{ color: 'var(--ochre)', marginTop: '4px', fontSize: '11.5px' }}>
                       💬 Latest Note: "{step.latestNote.note_text}" — <i>{step.latestNote.author}</i>
                     </div>
@@ -390,16 +398,16 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                           disabled={isWaiting || actionLoading}
                           onClick={() => handleSaveStep3SFTP(true)}
                         >
-                          {actionLoading ? 'Configuring...' : '⚙ Configure SFTP'}
+                          {actionLoading ? 'Completing...' : '✓ Complete Step 3'}
                         </button>
                       ) : (
                         <button
                           type="button"
                           className="btn tiny primary"
                           disabled={isWaiting || actionLoading}
-                          onClick={() => handleSaveStep3SFTP(false)}
+                          onClick={() => setShowSftpModal(true)}
                         >
-                          {actionLoading ? 'Completing...' : '✓ Complete Step 3'}
+                          {actionLoading ? 'Configuring...' : '⚙ Configure SFTP'}
                         </button>
                       )}
                     </div>
@@ -407,12 +415,20 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
 
                   {/* Step 4 Content (Production Schedule) */}
                   {step.step_number === 4 && (
-                    <div className="step-custom-box">
-                      <form onSubmit={handleSaveStep4Schedule} style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '3px' }}>
-                            Production Date <span style={{ color: 'var(--brick)' }}>* (Required)</span>:
-                          </label>
+                    <div className="step-custom-box" style={{ padding: '8px 12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                      {step.done && (step.extra?.schedule || step.latestNote) && (
+                        <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                          <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Current Schedule Configuration</div>
+                          <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                            <div style={{ marginBottom: '4px' }}><b>Date:</b> {formatToMMDDYYYY(step.extra?.schedule?.production_date) || 'N/A'}</div>
+                            <div style={{ marginBottom: '4px' }}><b>Time (EST):</b> {step.extra?.schedule?.production_time || 'N/A'}</div>
+                            <div><b>Notes:</b> {step.extra?.schedule?.notes || step.latestNote?.note_text || 'None'}</div>
+                          </div>
+                        </div>
+                      )}
+                      <form onSubmit={handleSaveStep4Schedule} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>Date *:</label>
                           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                             <input
                               type="text"
@@ -422,7 +438,7 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                               value={productionDate}
                               disabled={isWaiting || actionLoading}
                               onChange={e => setProductionDate(e.target.value)}
-                              style={{ padding: '6px 28px 6px 9px', border: '1px solid var(--line)', borderRadius: '2px', fontSize: '12.5px', width: '130px', fontFamily: 'var(--mono), inherit' }}
+                              style={{ padding: '4px 26px 4px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', color: 'var(--ink)', height: '28px', width: '125px', fontFamily: 'var(--mono), inherit' }}
                             />
                             <button
                               type="button"
@@ -476,52 +492,72 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                             />
                           </div>
                         </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '3px' }}>
-                            Production Time (Optional):
-                          </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>Time (EST) *:</label>
                           <input
                             type="time"
+                            required
                             value={productionTime}
                             disabled={isWaiting || actionLoading}
                             onChange={e => setProductionTime(e.target.value)}
-                            style={{ padding: '6px 9px', border: '1px solid var(--line)', borderRadius: '2px', fontSize: '12.5px', width: '115px' }}
+                            style={{ padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', color: 'var(--ink)', height: '28px', width: '110px' }}
                           />
                         </div>
-                        <button
-                          type="submit"
-                          className="btn tiny primary"
-                          disabled={isWaiting || actionLoading || !productionDate.trim()}
-                        >
-                          {actionLoading ? 'Saving...' : '✓ Save & Complete Step 4'}
-                        </button>
+                        <div style={{ flex: 1, minWidth: '180px' }}>
+                          <input
+                            style={{ width: '100%', padding: '4px 8px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: '12px', background: '#fff', color: 'var(--ink)', height: '28px' }}
+                            placeholder="Meeting notes / calendar details (optional)"
+                            value={productionNotes}
+                            disabled={isWaiting || actionLoading}
+                            onChange={(e) => setProductionNotes(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <button
+                            type="submit"
+                            className="btn tiny primary"
+                            disabled={isWaiting || actionLoading || !productionDate.trim()}
+                            style={{ padding: '5px 12px', fontWeight: 600, whiteSpace: 'nowrap', height: '28px' }}
+                          >
+                            {actionLoading ? 'Saving...' : 'Save Schedule & Complete'}
+                          </button>
+                        </div>
                       </form>
                     </div>
                   )}
 
                   {/* Step 5 Content (Any Special Comment) */}
                   {step.step_number === 5 && (
-                    <div className="step-custom-box">
-                      <form onSubmit={handleSaveStep5Comment}>
-                        <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--ink-2)', marginBottom: '4px' }}>
-                          Special Instructions / Overrides (Optional — leave blank if none):
-                        </label>
-                        <textarea
-                          rows="2"
-                          placeholder="Enter any client-specific operational notes, escalation contacts, or cutover window comments..."
-                          value={specialComment}
-                          disabled={isWaiting || actionLoading}
-                          onChange={e => setSpecialComment(e.target.value)}
-                          style={{ width: '100%', padding: '7px 9px', border: '1px solid var(--line)', borderRadius: '2px', fontSize: '12.5px', marginBottom: '8px' }}
-                        />
+                    <div className="step-custom-box" style={{ padding: '8px 12px', background: '#F8FAFC', borderRadius: '4px', border: '1px solid var(--line-soft)' }}>
+                      {isDone && step.latestNote && (
+                        <div style={{ marginBottom: '12px', padding: '10px 12px', background: '#fff', borderRadius: '4px', border: '1px solid var(--line)' }}>
+                          <div style={{ fontWeight: 600, fontSize: '11.5px', color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                            Current Special Processing Instructions
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--ink)' }}>
+                            <div><b>Note:</b> {step.latestNote.note_text}</div>
+                          </div>
+                        </div>
+                      )}
+                      <label style={{ fontWeight: 600, fontSize: 11.5, display: 'block', marginBottom: 6, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Special Processing Instructions / Comments Logged</label>
+                      <textarea
+                        rows={1}
+                        style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--line)', borderRadius: '3px', fontSize: 12, resize: 'vertical', minHeight: '28px' }}
+                        placeholder="Enter any client-specific operational notes, escalation contacts, or cutover window comments..."
+                        value={specialComment}
+                        disabled={isWaiting || actionLoading}
+                        onChange={e => setSpecialComment(e.target.value)}
+                      />
+                      <div style={{ marginTop: 6, textAlign: 'right' }}>
                         <button
-                          type="submit"
+                          type="button"
                           className="btn tiny primary"
+                          onClick={handleSaveStep5Comment}
                           disabled={isWaiting || actionLoading}
                         >
-                          {actionLoading ? 'Saving...' : '✓ Save & Complete Step 5'}
+                          {actionLoading ? 'Saving...' : 'Submit & Complete Step 5'}
                         </button>
-                      </form>
+                      </div>
                     </div>
                   )}
 
@@ -649,6 +685,17 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
         content={feedback.content}
         checks={feedback.checks}
       />
+
+      {showSftpModal && (
+        <ClientSftpModal
+          clientId={selectedClientId}
+          onClose={() => setShowSftpModal(false)}
+          onConfigured={() => {
+            setShowSftpModal(false);
+            handleSaveStep3SFTP(false);
+          }}
+        />
+      )}
 
       <ConfirmModal
         isOpen={redoConfirm.isOpen}
