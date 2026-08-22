@@ -404,23 +404,11 @@ def api_download_archive_zip(request):
                     added_files.add(fname)
 
     mem_zip.seek(0)
+    if not added_files:
+        return JsonResponse({"error": f"No {download_type} files found to archive."}, status=404)
 
-    if not os.path.exists(archive_dir):
-        return JsonResponse({"error": "Archive directory does not exist."}, status=404)
-
-    files = [f for f in os.listdir(archive_dir) if os.path.isfile(archive_dir / f) and not f.startswith(".")]
-    if not files:
-        return JsonResponse({"error": "No files found in archive folder."}, status=404)
-
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fname in files:
-            fpath = archive_dir / fname
-            zf.write(fpath, arcname=fname)
-
-    zip_buffer.seek(0)
-    response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
-    response["Content-Disposition"] = 'attachment; filename="edi835_archive_files.zip"'
+    response = HttpResponse(mem_zip.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="edi835_{download_type}_archive.zip"'
     return response
 
 

@@ -221,7 +221,7 @@ export default function ArchiveView({
                 minWidth: "210px",
                 overflow: "hidden",
               }}
-            >
+             >
               <a
                 href="/api/download-zip/?type=mir"
                 style={{
@@ -235,7 +235,7 @@ export default function ArchiveView({
                 }}
                 onClick={() => setShowZipMenu(false)}
               >
-                📄 Download all MIR (.mir)
+                Download all MIR (.mir)
               </a>
               <a
                 href="/api/download-zip/?type=835"
@@ -250,7 +250,7 @@ export default function ArchiveView({
                 }}
                 onClick={() => setShowZipMenu(false)}
               >
-                📦 Download all 835 (.x12 / .835)
+                Download all 835 (.x12 / .835)
               </a>
               <a
                 href="/api/download-zip/?type=both"
@@ -264,7 +264,7 @@ export default function ArchiveView({
                 }}
                 onClick={() => setShowZipMenu(false)}
               >
-                ⚡ Download Both (MIR & 835)
+                Download Both (MIR & 835)
               </a>
             </div>
           )}
