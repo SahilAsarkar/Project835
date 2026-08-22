@@ -101,7 +101,11 @@ def tracked_files_list(request):
     input_dir = dirs["input"]
     archive_dir = dirs["archive"]
 
-    records = EDI835File.objects.all()[:200]
+    client = getattr(request.user, "client", None)
+    if request.user.is_staff:
+        records = EDI835File.objects.all().order_by('-uploaded_at')[:200]
+    else:
+        records = EDI835File.objects.filter(client=client).order_by('-uploaded_at')[:200]
     data = []
     for r in records:
         in_sftp = r.present_in_sftp
@@ -158,8 +162,11 @@ def api_get_metrics(request):
     """
     today = timezone.localdate()
 
+    client = getattr(request.user, "client", None)
+    base_qs = EDI835File.objects.all() if request.user.is_staff else EDI835File.objects.filter(client=client)
+
     # Archived / Completed files (SFTP or Manual)
-    archived_qs = EDI835File.objects.filter(status__in=["ARCHIVED", "COMPLETED"])
+    archived_qs = base_qs.filter(status__in=["ARCHIVED", "COMPLETED"])
 
     # Calculate total claims & files converted today
     files_today = archived_qs.filter(uploaded_at__date=today)
@@ -173,8 +180,8 @@ def api_get_metrics(request):
         total_claims_converted_today = archived_qs.aggregate(total=Sum("claims_count"))["total"] or 0
         converted_today_file_count = archived_qs.count()
 
-    validated_waiting_count = EDI835File.objects.filter(status="PROCESSING").count()
-    runs_needing_attention_count = EDI835File.objects.filter(status="ERROR").count()
+    validated_waiting_count = base_qs.filter(status="PROCESSING").count()
+    runs_needing_attention_count = base_qs.filter(status="ERROR").count()
     mir_outputs_today_count = converted_today_file_count
 
     dirs = get_edi835_storage_dirs()
@@ -183,11 +190,11 @@ def api_get_metrics(request):
     if os.path.exists(archive_dir):
         archive_folder_files_count = len([f for f in os.listdir(archive_dir) if os.path.isfile(os.path.join(archive_dir, f))])
 
-    total_conversion_sets = EDI835File.objects.count()
-    validated_sets_count = EDI835File.objects.exclude(status="ERROR").count()
+    total_conversion_sets = base_qs.count()
+    validated_sets_count = base_qs.exclude(status="ERROR").count()
     processed_sets_count = archived_qs.count()
-    waiting_failed_count = EDI835File.objects.filter(status__in=["PROCESSING", "ERROR"]).count()
-    val_failed_count = EDI835File.objects.filter(status="ERROR").count()
+    waiting_failed_count = base_qs.filter(status__in=["PROCESSING", "ERROR"]).count()
+    val_failed_count = base_qs.filter(status="ERROR").count()
 
     return JsonResponse({
         "total_claims_converted_today": total_claims_converted_today,
@@ -725,6 +732,10 @@ def api_save_sftp_config(request):
 
     config_id = body.get("id")
     client_id = body.get("client_id") or body.get("client")
+    
+    if not request.user.is_staff:
+        client = getattr(request.user, "client", None)
+        client_id = str(client.id) if client else None
     config = None
     if config_id:
         config = SFTPConfig.objects.filter(id=config_id).first()
@@ -944,6 +955,8 @@ def api_delete_sftp_config(request):
     if config_id:
         config = SFTPConfig.objects.filter(id=config_id).first()
         if config:
+            if not request.user.is_staff and config.client != getattr(request.user, "client", None):
+                return JsonResponse({"error": "Unauthorized to delete this config."}, status=403)
             log_audit_event(
                 module="SYSTEM",
                 action="SFTP_CONFIG_DELETED",
@@ -951,8 +964,12 @@ def api_delete_sftp_config(request):
                 performed_by=user_name,
                 client=config.client
             )
-        SFTPConfig.objects.filter(id=config_id).delete()
+            config.delete()
     else:
+        if not request.user.is_staff:
+            SFTPConfig.objects.filter(client=getattr(request.user, "client", None)).delete()
+        else:
+            SFTPConfig.objects.all().delete()
         log_audit_event(
             module="SYSTEM",
             action="SFTP_CONFIG_ALL_DELETED",

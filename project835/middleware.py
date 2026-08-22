@@ -38,3 +38,21 @@ class AdminAccessMiddleware:
                     return JsonResponse({"success": False, "error": "MFA verification required."}, status=403)
                 
         return self.get_response(request)
+
+class ClientAccessMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path.lower()
+        
+        # Protect general /api/ routes that aren't for accounts/login
+        if path.startswith('/api/') and not path.startswith('/accounts/api/login') and not path.startswith('/accounts/api/signup') and not path.startswith('/admin-panel/'):
+            if not request.user.is_authenticated:
+                return JsonResponse({"success": False, "error": "Access denied. Authentication required."}, status=401)
+            
+            # Enforce MFA verification for standard API access if TOTP is enabled
+            if getattr(request.user, "totp_enabled", False) and not request.session.get("totp_verified", False) and not path.startswith('/accounts/api/totp'):
+                return JsonResponse({"success": False, "error": "MFA verification required."}, status=403)
+                
+        return self.get_response(request)

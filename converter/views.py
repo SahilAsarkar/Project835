@@ -504,6 +504,9 @@ def api_get_file_content(request, file_id):
     except (EDI835File.DoesNotExist, ValueError):
         return JsonResponse({"error": "File record not found."}, status=404)
 
+    if getattr(request.user, "client", None) != db_rec.client and not request.user.is_staff:
+        return JsonResponse({"error": "Unauthorized access to file."}, status=403)
+
     from pathlib import Path
     from django.conf import settings
     from edi835.services import get_edi835_storage_dirs
@@ -518,7 +521,7 @@ def api_get_file_content(request, file_id):
         paths_to_check.append(Path(settings.BASE_DIR) / db_rec.input_path)
 
     # Check if multiple file names exist in original_filename (e.g. "f1.835, f2.835")
-    raw_names = [n.strip() for n in (db_rec.original_filename or "").split(",") if n.strip()]
+    raw_names = [os.path.basename(n.strip()) for n in (db_rec.original_filename or "").split(",") if n.strip()]
     for fn in raw_names:
         paths_to_check.append(dirs["archive"] / fn)
         paths_to_check.append(dirs["input"] / fn)

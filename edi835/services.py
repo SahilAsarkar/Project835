@@ -189,9 +189,22 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
     """
     dirs = get_edi835_storage_dirs()
 
-    stored_filename = original_filename
+    # Sanitize filename to prevent path traversal
+    original_filename = os.path.basename(original_filename)
     base_name = os.path.splitext(original_filename)[0]
     mir_filename = f"{base_name}.mir"
+
+    db_record = None
+    file_uuid = uuid.uuid4()
+    if file_id:
+        try:
+            db_record = EDI835File.objects.get(id=file_id)
+            file_uuid = db_record.id
+        except (EDI835File.DoesNotExist, ValueError):
+            db_record = None
+
+    # Prefix with UUID to prevent file overwrite collisions
+    stored_filename = f"{file_uuid}_{original_filename}"
 
     # Step 1: Save uploaded file to input/ folder
     input_file_path = dirs["input"] / stored_filename
@@ -200,15 +213,7 @@ def process_edi835_file_content(edi_text, original_filename="uploaded_file.x12",
 
     relative_input_path = (Path("media") / "edi835" / "input" / stored_filename).as_posix()
 
-    db_record = None
-    if file_id:
-        try:
-            db_record = EDI835File.objects.get(id=file_id)
-        except (EDI835File.DoesNotExist, ValueError):
-            db_record = None
-
     if not db_record:
-        file_uuid = uuid.uuid4()
         db_record = EDI835File.objects.create(
             id=file_uuid,
             client=client,
@@ -317,19 +322,24 @@ def process_multiple_edi835_files(files_list, ingestion_source="SFTP", client=No
 
     first_archive_rel_path = None
 
+    file_uuid = uuid.uuid4()
     for idx, item in enumerate(files_list):
         fname = item.get("filename") or item.get("original_filename") or f"file_{idx+1}.835"
+        fname = os.path.basename(fname)
         file_names.append(fname)
 
         content = (item.get("content") or item.get("edi_text") or "").lstrip("\ufeff").strip()
         if not content:
             continue
 
+        # Prefix with UUID to avoid overwrites in batch mode
+        stored_fname = f"{file_uuid}_{idx}_{fname}"
+        
         # Save each input file to archive/
-        archive_path_file = dirs["archive"] / fname
+        archive_path_file = dirs["archive"] / stored_fname
         with open(archive_path_file, "w", encoding="utf-8") as af:
             af.write(content)
-        rel_archive_path = (Path("media") / "edi835" / "archive" / fname).as_posix()
+        rel_archive_path = (Path("media") / "edi835" / "archive" / stored_fname).as_posix()
         if not first_archive_rel_path:
             first_archive_rel_path = rel_archive_path
 
@@ -369,7 +379,7 @@ def process_multiple_edi835_files(files_list, ingestion_source="SFTP", client=No
 
     # Create or update a SINGLE DB record for this batch run
     db_rec = EDI835File.objects.create(
-        id=uuid.uuid4(),
+        id=file_uuid,
         client=client,
         original_filename=combined_inputs_str,
         stored_filename=file_names[0] if file_names else "batch.835",

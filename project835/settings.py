@@ -1,3 +1,5 @@
+import os
+import dj_database_url
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -7,15 +9,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ============================================================
 
-SECRET_KEY = "django-insecure-project835-combined-key-change-in-production"
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "t")
 
-DEBUG = True
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-project835-combined-key-change-in-production")
+if len(SECRET_KEY) < 50 or SECRET_KEY.startswith("django-insecure-"):
+    if not DEBUG:
+        raise ValueError("Insecure SECRET_KEY detected in production!")
 
-ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
-    "*",
-]
+ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,*").split(",") if host.strip()]
+
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",") if origin.strip()]
+
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 
 # ============================================================
 # SMTP FIELD ENCRYPTION
@@ -24,7 +32,7 @@ ALLOWED_HOSTS = [
 # an environment variable instead of hardcoding here.
 # Rotate this key only if you re-encrypt all existing rows.
 # ============================================================
-SMTP_FIELD_ENCRYPTION_KEY = "4xx_IBlROjL-jqvIVAF0VuN76EoOHbLoXOGNSfuwXLY="
+SMTP_FIELD_ENCRYPTION_KEY = os.getenv("SMTP_FIELD_ENCRYPTION_KEY", "4xx_IBlROjL-jqvIVAF0VuN76EoOHbLoXOGNSfuwXLY=")
 
 
 # ============================================================
@@ -58,6 +66,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "project835.middleware.AdminAccessMiddleware",
+    "project835.middleware.ClientAccessMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -106,10 +115,11 @@ ASGI_APPLICATION = "project835.asgi.application"
 # ============================================================
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 
@@ -158,6 +168,7 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # ============================================================
@@ -183,6 +194,8 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 # ============================================================
