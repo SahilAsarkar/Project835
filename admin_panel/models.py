@@ -158,3 +158,17 @@ class ClientSmtpConfig(models.Model):
 
     def __str__(self):
         return f"SMTP for {self.client.name} ({self.smtp_host})"
+
+
+def log_audit_event(module, action, details, performed_by="System", client=None):
+    try:
+        AuditLog.objects.create(
+            module=module.upper(),
+            action=action.upper(),
+            details=details,
+            performed_by=performed_by,
+            client=client
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to log audit event: {e}")

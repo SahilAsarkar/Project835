@@ -111,7 +111,6 @@ export default function App({ user, onLogout }) {
     if (!isAuthenticated) return;
     loadClients();
     loadRoles();
-    loadAuditLogs();
 
     // Auto-update client status in real-time every 3 seconds
     const interval = setInterval(() => {
@@ -134,6 +133,13 @@ export default function App({ user, onLogout }) {
       window.removeEventListener('focus', onFocus);
     };
   }, [isAuthenticated, activeClientId]);
+
+  // Auto-reload audit logs whenever filters change
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAuditLogs(auditClientFilter, auditModuleFilter);
+    }
+  }, [isAuthenticated, auditClientFilter, auditModuleFilter]);
 
   // Sync state to URL for persistence on refresh
   useEffect(() => {
@@ -624,9 +630,23 @@ export default function App({ user, onLogout }) {
                     getSortedAuditLogs().map((log) => (
                       <tr key={log.id}>
                         <td className="num">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
-                        <td><span className="tag" style={{ textTransform: 'uppercase', fontSize: '10px' }}>{log.module || 'SYSTEM'}</span></td>
+                        <td
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setAuditModuleFilter(auditModuleFilter === (log.module || 'SYSTEM') ? '' : (log.module || 'SYSTEM'))}
+                          title="Click to toggle filter by this module"
+                        >
+                          <span className="tag" style={{ textTransform: 'uppercase', fontSize: '10px', cursor: 'pointer' }}>
+                            {log.module || 'SYSTEM'}
+                          </span>
+                        </td>
                         <td><span className="tag ok">{log.action}</span></td>
-                        <td><b>{log.client_name || log.client || 'System'}</b></td>
+                        <td
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setAuditClientFilter(auditClientFilter === (log.client_id || '') ? '' : (log.client_id || ''))}
+                          title="Click to toggle filter by this client"
+                        >
+                          <b>{log.client_name || log.client || 'System'}</b>
+                        </td>
                         <td>{renderAuditDetails(log.details)}</td>
                         <td className="num">{log.performed_by || 'Admin User'}</td>
                       </tr>

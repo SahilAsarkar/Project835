@@ -30,9 +30,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const saved = localStorage.getItem("activeTab");
-      // Never restore 'conn' (Connections) tab - always start on 'flow'
       // Also skip 'admin' which is a separate route
-      const skipTabs = ["admin", "conn"];
+      const skipTabs = ["admin"];
       return saved && !skipTabs.includes(saved) ? saved : "flow";
     } catch (e) {
       return "flow";

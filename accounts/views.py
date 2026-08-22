@@ -239,6 +239,16 @@ def api_login(request):
 
         client_str = user.client.name if (user.client and not user.is_staff and not user.is_superuser) else "OneSmarter"
 
+        # Audit Logging
+        from admin_panel.models import log_audit_event
+        log_audit_event(
+            module="AUTH",
+            action="LOGIN_INIT",
+            details=f"User '{user.email}' logged in (2FA verification pending).",
+            performed_by=user.name or user.email,
+            client=user.client
+        )
+
         return JsonResponse({
             "success": True,
             "next": next_step,
@@ -281,6 +291,17 @@ def api_signup(request):
         user = form.save()
         login(request, user)
         request.session["totp_setup_required"] = True
+
+        # Audit Logging
+        from admin_panel.models import log_audit_event
+        log_audit_event(
+            module="AUTH",
+            action="SIGNUP",
+            details=f"New user registration for '{user.email}' (Client: {user.client.name if user.client else 'None'}).",
+            performed_by=user.name or user.email,
+            client=user.client
+        )
+
         return JsonResponse({
             "success": True,
             "next": "totp_setup",
@@ -342,6 +363,16 @@ def api_totp_setup(request):
             request.session["totp_verified"] = True
             request.session["totp_setup_required"] = False
 
+            # Audit Logging
+            from admin_panel.models import log_audit_event
+            log_audit_event(
+                module="AUTH",
+                action="TOTP_SETUP",
+                details=f"User '{user.email}' successfully configured 2FA (TOTP).",
+                performed_by=user.name or user.email,
+                client=user.client
+            )
+
             return JsonResponse({
                 "success": True,
                 "verified": True,
@@ -377,6 +408,17 @@ def api_totp_verify(request):
     totp = pyotp.TOTP(user.totp_secret)
     if totp.verify(code):
         request.session["totp_verified"] = True
+
+        # Audit Logging
+        from admin_panel.models import log_audit_event
+        log_audit_event(
+            module="AUTH",
+            action="LOGIN_SUCCESS",
+            details=f"User '{user.email}' successfully authenticated (2FA verified).",
+            performed_by=user.name or user.email,
+            client=user.client
+        )
+
         return JsonResponse({
             "success": True,
             "next": "home",
@@ -387,7 +429,25 @@ def api_totp_verify(request):
 
 @csrf_exempt
 def api_logout(request):
+    user = request.user
+    user_name = "System"
+    client_obj = None
+    if user and user.is_authenticated:
+        user_name = user.name or user.email
+        client_obj = getattr(user, "client", None)
+
     logout(request)
+
+    # Audit Logging
+    from admin_panel.models import log_audit_event
+    log_audit_event(
+        module="AUTH",
+        action="LOGOUT",
+        details=f"User '{user_name}' logged out.",
+        performed_by=user_name,
+        client=client_obj
+    )
+
     return JsonResponse({"success": True})
 
 

@@ -763,6 +763,19 @@ def api_save_sftp_config(request):
     config.last_tested_at = timezone.now()
     config.save()
 
+    # Audit Logging
+    user_name = "System"
+    if request.user and request.user.is_authenticated:
+        user_name = request.user.name or request.user.email
+    from admin_panel.models import log_audit_event
+    log_audit_event(
+        module="SYSTEM",
+        action="SFTP_CONFIG_SAVED",
+        details=f"SFTP Configuration '{config.name}' saved for host {config.host}. Status: {config.status}.",
+        performed_by=user_name,
+        client=config.client
+    )
+
     discovered_folders = [
         {"path": inbound_835_folder, "type": "835 Inbound Source"},
         {"path": inbound_837_folder, "type": "837 Reference (Optional)"},
@@ -911,10 +924,33 @@ def api_delete_sftp_config(request):
         body = request.POST
 
     config_id = body.get("config_id")
+    user_name = "System"
+    if request.user and request.user.is_authenticated:
+        user_name = request.user.name or request.user.email
+    from admin_panel.models import log_audit_event
+
     if config_id:
+        config = SFTPConfig.objects.filter(id=config_id).first()
+        if config:
+            log_audit_event(
+                module="SYSTEM",
+                action="SFTP_CONFIG_DELETED",
+                details=f"SFTP Configuration '{config.name}' deleted.",
+                performed_by=user_name,
+                client=config.client
+            )
         SFTPConfig.objects.filter(id=config_id).delete()
     else:
+        log_audit_event(
+            module="SYSTEM",
+            action="SFTP_CONFIG_ALL_DELETED",
+            details="All SFTP Configurations deleted.",
+            performed_by=user_name,
+            client=None
+        )
         SFTPConfig.objects.all().delete()
+
+    return JsonResponse({"success": True})
 
 @csrf_exempt
 def api_push_to_sftp(request):

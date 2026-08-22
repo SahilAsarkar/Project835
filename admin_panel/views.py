@@ -1444,6 +1444,18 @@ def api_admin_client_documents_upload(request, client_id):
         uploaded_by="Admin User"
     )
     doc.file.save(filename, ContentFile(file_bytes), save=True)
+
+    # Audit Logging
+    actor = "Admin User"
+    if request.user and request.user.is_authenticated:
+        actor = request.user.name or request.user.email
+    AuditLog.objects.create(
+        module="DOCUMENTS",
+        action="DOCUMENT_UPLOADED",
+        details=f"Uploaded document '{doc_name}' ({filename}) for client '{client_obj.name}'.",
+        performed_by=actor,
+        client=client_obj
+    )
     
     return JsonResponse({
         "success": True,
@@ -1483,6 +1495,19 @@ def api_admin_document_delete(request, doc_id):
     try:
         doc = ClientDocument.objects.get(id=doc_id)
         doc.file.delete(save=False)
+
+        # Audit Logging
+        actor = "Admin User"
+        if request.user and request.user.is_authenticated:
+            actor = request.user.name or request.user.email
+        AuditLog.objects.create(
+            module="DOCUMENTS",
+            action="DOCUMENT_DELETED",
+            details=f"Deleted document '{doc.document_name}' ({doc.original_filename}) for client '{doc.client.name}'.",
+            performed_by=actor,
+            client=doc.client
+        )
+
         doc.delete()
         return JsonResponse({"success": True, "message": "Document deleted successfully"})
     except ClientDocument.DoesNotExist:

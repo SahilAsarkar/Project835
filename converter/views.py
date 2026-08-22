@@ -78,6 +78,19 @@ def api_convert(request):
                 import logging
                 logging.getLogger(__name__).error(f"Failed to send email: {e}")
 
+        # Audit Logging
+        user_name = "System"
+        if request.user and request.user.is_authenticated:
+            user_name = request.user.name or request.user.email
+        from admin_panel.models import log_audit_event
+        log_audit_event(
+            module="DOCUMENTS",
+            action="BATCH_CONVERSION",
+            details=f"Batch converted {batch_res['files_count']} EDI 835 files. Claims: {batch_res['claims_count']}.",
+            performed_by=user_name,
+            client=client
+        )
+
         return JsonResponse({
             'success': True,
             'text': batch_res['mir_text'],
@@ -141,6 +154,19 @@ def api_convert(request):
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"Failed to send email: {e}")
+
+    # Audit Logging
+    user_name = "System"
+    if request.user and request.user.is_authenticated:
+        user_name = request.user.name or request.user.email
+    from admin_panel.models import log_audit_event
+    log_audit_event(
+        module="DOCUMENTS",
+        action="FILE_CONVERSION",
+        details=f"Converted EDI 835 file '{original_filename}'. Claims: {res['claims_count']}.",
+        performed_by=user_name,
+        client=client
+    )
 
     return JsonResponse({
         'success': True,
