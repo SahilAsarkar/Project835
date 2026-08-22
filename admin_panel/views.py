@@ -2243,6 +2243,20 @@ def api_admin_offboarding_step_complete(request, client_id, step_num):
             client_obj.status = 'INACTIVE'
             client_obj.stage = 'offboarded'
             client_obj.save()
+            
+            # Deactivate all users belonging to this client
+            from accounts.models import User as AccountUser
+            client_users = AccountUser.objects.filter(client=client_obj, is_staff=False, is_superuser=False)
+            client_users.update(is_active=False)
+            
+            # Flush all sessions for these users so they get kicked immediately
+            from django.contrib.sessions.models import Session
+            from django.utils import timezone
+            for session in Session.objects.filter(expire_date__gte=timezone.now()):
+                data = session.get_decoded()
+                uid = data.get('_auth_user_id')
+                if uid and client_users.filter(id=uid).exists():
+                    session.delete()
 
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
@@ -2267,6 +2281,10 @@ def api_admin_offboarding_step_redo(request, client_id, step_num):
             client_obj.status = 'ACTIVE'
             client_obj.stage = 'production' # fallback
             client_obj.save()
+            
+            # Reactivate all users belonging to this client
+            from accounts.models import User as AccountUser
+            AccountUser.objects.filter(client=client_obj, is_staff=False, is_superuser=False).update(is_active=True)
             
     except ClientOffboardingStatus.DoesNotExist:
         pass

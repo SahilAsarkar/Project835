@@ -42,6 +42,12 @@ def login_view(request):
         form = LoginForm(request.POST)
         if form.is_valid():
             user = form.user
+            
+            # Block offboarded client users
+            if not user.is_staff and not user.is_superuser and user.client and getattr(user.client, 'stage', '') == 'offboarded':
+                messages.error(request, f"ACCESS DENIED: {user.client.name} has been offboarded. Contact the administrator for assistance.")
+                return render(request, "accounts/login.html", {"form": form})
+            
             login(request, user)
             if not user.totp_enabled:
                 request.session["totp_setup_required"] = True
@@ -173,8 +179,16 @@ def api_user_info(request):
 
     client_str = request.user.client.name if (request.user.client and not request.user.is_staff and not request.user.is_superuser) else "OneSmarter"
 
+    # Check if client is offboarded
+    is_offboarded = False
+    if request.user.client and not request.user.is_staff and not request.user.is_superuser:
+        if getattr(request.user.client, 'stage', '') == 'offboarded':
+            is_offboarded = True
+
     return JsonResponse({
         "authenticated": True,
+        "offboarded": is_offboarded,
+        "offboarded_message": f"ACCESS DENIED: {client_str} has been offboarded. Contact the administrator for assistance." if is_offboarded else None,
         "user": {
             "name": user_name,
             "email": user_email,
@@ -217,6 +231,14 @@ def api_login(request):
                 "success": False,
                 "error": "Access Denied: Administrative credentials cannot be used for standard user login."
             }, status=400)
+
+        # Block login for users whose client has been offboarded
+        if not is_user_staff and user.client and getattr(user.client, 'stage', '') == 'offboarded':
+            return JsonResponse({
+                "success": False,
+                "error": f"ACCESS DENIED: {user.client.name} has been offboarded. Contact the administrator for assistance.",
+                "offboarded": True
+            }, status=403)
 
         login(request, user)
         

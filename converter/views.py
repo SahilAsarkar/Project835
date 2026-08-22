@@ -432,6 +432,7 @@ def api_download_archive_zip(request):
     from edi835.services import get_edi835_storage_dirs
 
     download_type = (request.GET.get("type") or "both").lower()
+    client_id = request.GET.get("client")
     dirs = get_edi835_storage_dirs()
     archive_dir = dirs["archive"]
     output_dir = dirs["output"]
@@ -440,7 +441,11 @@ def api_download_archive_zip(request):
     added_files = set()
 
     with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        records = EDI835File.objects.all()
+        if client_id:
+            records = EDI835File.objects.filter(client_id=client_id)
+        else:
+            records = EDI835File.objects.all()
+            
         for rec in records:
             orig_name = rec.original_filename or rec.stored_filename
             if not orig_name:
@@ -465,20 +470,21 @@ def api_download_archive_zip(request):
                     zf.write(mir_path, arcname=f"mir_files/{mir_filename}")
                     added_files.add(mir_filename)
 
-        # Sweep output and archive directories for any physical files
-        if download_type in ["835", "both"] and os.path.exists(archive_dir):
-            for fname in os.listdir(archive_dir):
-                fpath = archive_dir / fname
-                if os.path.isfile(fpath) and fname not in added_files:
-                    zf.write(fpath, arcname=f"835_files/{fname}")
-                    added_files.add(fname)
-
-        if download_type in ["mir", "both"] and os.path.exists(output_dir):
-            for fname in os.listdir(output_dir):
-                fpath = output_dir / fname
-                if os.path.isfile(fpath) and fname.endswith(".mir") and fname not in added_files:
-                    zf.write(fpath, arcname=f"mir_files/{fname}")
-                    added_files.add(fname)
+        # Sweep output and archive directories for any physical files ONLY if no client_id is specified
+        if not client_id:
+            if download_type in ["835", "both"] and os.path.exists(archive_dir):
+                for fname in os.listdir(archive_dir):
+                    fpath = archive_dir / fname
+                    if os.path.isfile(fpath) and fname not in added_files:
+                        zf.write(fpath, arcname=f"835_files/{fname}")
+                        added_files.add(fname)
+    
+            if download_type in ["mir", "both"] and os.path.exists(output_dir):
+                for fname in os.listdir(output_dir):
+                    fpath = output_dir / fname
+                    if os.path.isfile(fpath) and fname.endswith(".mir") and fname not in added_files:
+                        zf.write(fpath, arcname=f"mir_files/{fname}")
+                        added_files.add(fname)
 
     mem_zip.seek(0)
     if not added_files:

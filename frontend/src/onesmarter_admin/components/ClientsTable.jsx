@@ -146,7 +146,7 @@ export default function ClientsTable({ clients = [], onSelectClient, onOpenAddCl
             <th style={{ width: '13%' }}>Live Since / Started</th>
             <th style={{ width: '18%' }}>Onboarding Progress</th>
             <th style={{ width: '10%' }}>Owner</th>
-            <th style={{ width: '6%', textAlign: 'center' }}>Actions</th>
+            {/* <th style={{ width: '6%', textAlign: 'center' }}>Actions</th> */}
           </tr>
         </thead>
         <tbody id="clients-body">
@@ -197,7 +197,7 @@ export default function ClientsTable({ clients = [], onSelectClient, onOpenAddCl
                   <td>
                     <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{displayOwner}</span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  {/* <td style={{ textAlign: 'center' }}>
                     <button
                       className="btn tiny"
                       style={{
@@ -217,7 +217,7 @@ export default function ClientsTable({ clients = [], onSelectClient, onOpenAddCl
                     >
                       Revoke
                     </button>
-                  </td>
+                  </td> */}
                 </tr>
               );
             })

@@ -95,10 +95,10 @@ function ClientOffboarding({ clients, activeClientId, onSelectClient, offboardin
           Please select a client to view offboarding procedures.
         </div>
       ) : (
-        <div className="ladder">
+        <div className="ladder" style={{ paddingLeft: '10px' }}>
           {/* Step 1 */}
           <div className="rung" style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
-            <div className="mark" style={{ background: step1Done ? 'var(--teal-bg)' : undefined, color: step1Done ? 'var(--teal)' : undefined }}>1</div>
+            <div className="mark" style={{ background: step1Done ? 'var(--teal)' : undefined, color: step1Done ? '#fff' : undefined }}>{step1Done ? '✓' : '1'}</div>
             <div className="txt" style={{ flex: 1 }}>
               <h3>Termination Notice Recorded</h3>
               <div className="meta">Effective date registered in database</div>
@@ -149,22 +149,39 @@ function ClientOffboarding({ clients, activeClientId, onSelectClient, offboardin
 
           {/* Step 2 */}
           <div className="rung" style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
-            <div className="mark" style={{ background: step2Done ? 'var(--teal-bg)' : undefined, color: step2Done ? 'var(--teal)' : undefined }}>2</div>
+            <div className="mark" style={{ background: step2Done ? 'var(--teal)' : undefined, color: step2Done ? '#fff' : undefined }}>{step2Done ? '✓' : '2'}</div>
             <div className="txt">
               <h3>Archive Returned to Client</h3>
               <div className="meta">Exported in standard format with intact digital signatures</div>
               
               <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 {!step2Done ? (
-                  <button 
-                    type="button" 
-                    className="btn" 
-                    onClick={() => handleComplete(2)}
-                    disabled={!step1Done}
-                    style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px', opacity: !step1Done ? 0.5 : 1 }}
+                  <a
+                    href={`/api/download-zip/?type=both&client=${activeClientId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => {
+                      if(step1Done) {
+                        setTimeout(() => handleComplete(2), 500);
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      textDecoration: 'none',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--line)',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      color: 'inherit',
+                      borderRadius: '4px',
+                      opacity: !step1Done ? 0.5 : 1,
+                      pointerEvents: !step1Done ? 'none' : 'auto'
+                    }}
                   >
-                    ✓ Mark as Completed
-                  </button>
+                    <span>📦 Download Archive (MIR & 835)</span>
+                  </a>
                 ) : (
                   <button 
                     type="button" 
@@ -190,10 +207,10 @@ function ClientOffboarding({ clients, activeClientId, onSelectClient, offboardin
 
           {/* Step 3 */}
           <div className="rung" style={{ padding: '16px 0' }}>
-            <div className="mark" style={{ background: step3Done ? 'var(--brick-bg)' : 'var(--brick-bg)', color: 'var(--brick)' }}>3</div>
+            <div className="mark" style={{ background: step3Done ? 'var(--brick)' : 'var(--brick-bg)', color: step3Done ? '#fff' : 'var(--brick)' }}>{step3Done ? '✓' : '3'}</div>
             <div className="txt" style={{ flex: 1 }}>
-              <h3>Tenant Key Destruction</h3>
-              <div className="meta" style={{ color: 'var(--brick)', fontWeight: '600' }}>PERMANENT RECORD DELETION OF A CLIENT</div>
+              <h3>Offboard Client</h3>
+              <div className="meta" style={{ color: 'var(--brick)', fontWeight: '600' }}>PERMANENT OFFBOARDING — ALL USER ACCESS WILL BE REVOKED</div>
               
               <div style={{ marginTop: '12px' }}>
                 {!step3Done ? (
@@ -207,18 +224,18 @@ function ClientOffboarding({ clients, activeClientId, onSelectClient, offboardin
                     disabled={!step2Done}
                     style={{ background: 'var(--brick-bg)', borderColor: 'var(--brick)', color: 'var(--brick)', fontWeight: '600', padding: '8px 16px', opacity: !step2Done ? 0.5 : 1 }}
                   >
-                    ⚠️ Destroy Tenant Keys & Delete Records
+                    ⚠️ Offboard Client
                   </button>
                 ) : (
-                  <div>
-                    <span style={{ color: 'var(--brick)', fontWeight: 'bold' }}>✓ Client has been offboarded and terminated.</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ color: 'var(--brick)', fontWeight: 'bold' }}>✓ Client has been offboarded. All user access revoked.</span>
                     <button 
                       type="button" 
                       className="btn" 
                       onClick={() => handleRedo(3)}
-                      style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px', marginLeft: '10px' }}
+                      style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px' }}
                     >
-                      🔄 Undo Terminate
+                      🔄 Undo Offboard
                     </button>
                   </div>
                 )}
@@ -232,8 +249,15 @@ function ClientOffboarding({ clients, activeClientId, onSelectClient, offboardin
       {isConfirmOpen && (
         <div className="modal-backdrop">
           <div className="modal">
-            <h2 style={{ color: 'var(--brick)' }}>⚠️ Confirm Deletion</h2>
-            <p>This action is irreversible. All client keys will be destroyed.</p>
+            <h2 style={{ color: 'var(--brick)' }}>⚠️ Confirm Client Offboarding</h2>
+            <p style={{ marginTop: '8px' }}>This action will:</p>
+            <ul style={{ margin: '8px 0 12px 20px', fontSize: '13px', lineHeight: '1.7' }}>
+              <li>Set the client status to <strong>INACTIVE</strong></li>
+              <li>Mark the client as <strong>Offboarded</strong></li>
+              <li>Deactivate <strong>all users</strong> belonging to this client</li>
+              <li>Immediately <strong>revoke all active sessions</strong></li>
+              <li>Block all future login attempts for this client's users</li>
+            </ul>
             <p>Type <strong>{currentClient?.name}</strong> to confirm.</p>
             <input 
               type="text" 
@@ -248,9 +272,9 @@ function ClientOffboarding({ clients, activeClientId, onSelectClient, offboardin
                 className="btn primary" 
                 onClick={handleDestroyKeys}
                 disabled={confirmInput !== currentClient?.name}
-                style={{ background: 'var(--brick)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px' }}
+                style={{ background: 'var(--brick)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', opacity: confirmInput !== currentClient?.name ? 0.5 : 1 }}
               >
-                Confirm Destruct
+                Confirm Offboard
               </button>
               <button 
                 type="button" 
