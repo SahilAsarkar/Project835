@@ -152,8 +152,8 @@ button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer;border
 .me{display:flex;align-items:center;gap:9px;font-size:12.5px}
 .me .av{width:26px;height:26px;border-radius:50%;background:#2E4459;display:grid;place-items:center;font-family:var(--display);font-size:10.5px;letter-spacing:.04em}
 .me .role{font-family:var(--display);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.signout{font-size:12px;color:var(--ink-3)}
-.signout:hover{color:#fff}
+.btn-topbar-logout{display:inline-flex;align-items:center;justify-content:center;color:#fca5a5;text-decoration:none;padding:6px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.15);border-radius:4px;transition:all 0.2s ease;cursor:pointer}
+.btn-topbar-logout:hover{background:rgba(239,68,68,.35);color:#ffffff}
 
 /* ---------- shell ---------- */
 .shell{display:flex;min-height:calc(100vh - 56px)}
@@ -213,9 +213,76 @@ td.num{font-family:var(--display);font-variant-numeric:tabular-nums}
 .btn.danger{border-color:var(--brick);color:var(--brick)}
 .btn.mini{width:30px;height:30px;padding:0;justify-content:center}
 .btn.tiny{padding:4px 8px;font-size:11px;font-family:var(--display)}
-.btn.icon-btn{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;border-radius:3px;cursor:pointer;transition:transform .15s ease,background .15s ease,border-color .15s ease}
-.btn.icon-btn:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.12)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--ink);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.btn.icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-color: var(--line);
+}
+.btn.icon-btn.view-btn {
+  border-color: #d5e1ed;
+  background: #ffffff;
+}
+.btn.icon-btn.view-btn:hover {
+  border-color: var(--ink-2);
+  background: #fafbfc;
+}
+.btn.icon-btn.download-btn {
+  border-color: #d2e4e0;
+  background: #ffffff;
+}
+.btn.icon-btn.download-btn:hover {
+  border-color: var(--teal);
+  background: #f4faf8;
+}
+.btn.icon-btn.upload-btn {
+  border-color: #d5e1ed;
+  background: #ffffff;
+}
+.btn.icon-btn.upload-btn:hover {
+  border-color: var(--blue);
+  background: #f5f9fc;
+}
+.btn.icon-btn.upload-btn.done {
+  border-color: #d2e4e0;
+}
+.btn.icon-btn.upload-btn.done:hover {
+  border-color: var(--teal);
+  background: #f4faf8;
+}
+.btn.icon-btn.notes-btn {
+  border-color: #ede3d5;
+  background: #ffffff;
+}
+.btn.icon-btn.notes-btn:hover {
+  border-color: var(--ochre);
+  background: #fdfaf5;
+}
+.btn.icon-btn.redo-btn {
+  border-color: #f2dcda;
+  background: #ffffff;
+}
+.btn.icon-btn.redo-btn:hover {
+  border-color: var(--brick);
+  background: #fdf5f4;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 .spinner-icon{display:inline-block;width:11px;height:11px;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:spin .75s linear infinite;flex-shrink:0}
 .stub{margin-top:24px;border:1px dashed var(--line);padding:14px 16px;font-size:12.5px;color:var(--ink-2);background:var(--surface)}

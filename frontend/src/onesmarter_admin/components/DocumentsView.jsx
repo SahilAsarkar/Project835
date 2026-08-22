@@ -189,24 +189,35 @@ export default function DocumentsView({ clients = [], activeClientId, onSelectCl
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                       <button
                         type="button"
-                        className="btn tiny icon-btn"
+                        className="btn icon-btn view-btn"
                         onClick={() => handleView(doc)}
                         title={`View ${doc.document_name}`}
                         aria-label={`View ${doc.document_name}`}
                         disabled={viewingId === doc.id}
-                        style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue)', color: 'var(--blue)' }}
                       >
-                        {viewingId === doc.id ? '…' : '👁'}
+                        {viewingId === doc.id ? (
+                          '…'
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                          </svg>
+                        )}
                       </button>
                       <button
                         type="button"
-                        className="btn tiny primary icon-btn"
+                        className="btn icon-btn download-btn"
                         disabled={downloadingId === doc.id}
                         onClick={() => handleDownload(doc)}
                         title={`Download ${doc.document_name}`}
                         aria-label={`Download ${doc.document_name}`}
                       >
-                        {downloadingId === doc.id ? '…' : '⬇'}
+                        {downloadingId === doc.id ? (
+                          '…'
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </td>

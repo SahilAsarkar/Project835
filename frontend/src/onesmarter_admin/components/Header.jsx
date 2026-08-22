@@ -39,7 +39,6 @@ export default function Header({ onSignOut, currentUser, onToggleSidebar }) {
         <div className="wordmark">ONESMARTER <span>/ MIR RELAY ADMIN</span></div>
       </div>
       <div className="spacer"></div>
-      <div className="env env-ok" id="env">LIVE · DATABASE CONNECTED</div>
       <div className="me">
         <div className="av">{initials}</div>
         <div>
@@ -47,7 +46,26 @@ export default function Header({ onSignOut, currentUser, onToggleSidebar }) {
           <div className="role">{role}</div>
         </div>
       </div>
-      <button className="signout" id="signout" onClick={onSignOut}>Sign Out</button>
+      <button
+        type="button"
+        className="btn-topbar-logout"
+        title="Sign Out"
+        onClick={onSignOut}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="15"
+          height="15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+      </button>
     </div>
   );
 }

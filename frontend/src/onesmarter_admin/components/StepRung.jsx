@@ -1220,37 +1220,46 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
           {hasValidUpload && (
             <button
               type="button"
-              className="btn tiny icon-btn"
+              className="btn icon-btn view-btn"
               onClick={handleViewUploadedFile}
               title={`View Uploaded File (${latestUp?.original_filename || 'Evidence'})`}
               aria-label="View Uploaded File"
               disabled={viewerLoading}
-              style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue)', color: 'var(--blue)' }}
             >
-              {viewerLoading ? '…' : '👁'}
+              {viewerLoading ? (
+                '…'
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                  <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+              )}
             </button>
           )}
 
           {step.file && (
             <button
               type="button"
-              className="btn tiny icon-btn"
+              className="btn icon-btn download-btn"
               onClick={() => downloadTemplateFile(clientId, step.key, step.title, step.ext)}
               title={`Download Template (${step.downloadName || step.title})`}
               aria-label={`Download Template (${step.downloadName || step.title})`}
             >
-              ⬇
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
             </button>
           )}
 
           {(step.actionType === 'upload_template' || step.actionType === 'email_upload') && (
             <label
-              className={`btn tiny icon-btn ${step.done ? 'success' : 'primary'}`}
+              className={`btn icon-btn upload-btn ${step.done ? 'done' : ''}`}
               style={{ cursor: 'pointer' }}
               title={step.actionType === 'email_upload' ? "Upload Email Confirmation (Images & Documents)" : "Upload File"}
               aria-label="Upload File"
             >
-              ⬆
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                <path d="M5 20h14v-2H5v2zm0-10h4v6h6v-6h4l-7-7-7 7z"/>
+              </svg>
               <input
                 type="file"
                 hidden
@@ -1262,23 +1271,28 @@ export default function StepRung({ step, clientId, roles, onRefresh, onOpenNotes
 
           <button
             type="button"
-            className="btn tiny icon-btn"
+            className="btn icon-btn notes-btn"
             onClick={() => onOpenNotes(step.key, step.title)}
             title="Notes"
             aria-label="Notes"
           >
-            💬
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
           </button>
 
           {(step.done || step.inProgress) && (
             <button
               type="button"
-              className="btn tiny danger icon-btn"
+              className="btn icon-btn redo-btn"
               onClick={() => onOpenRedo(step.key, step.id)}
               title={`Redo Step ${step.id}`}
               aria-label={`Redo Step ${step.id}`}
             >
-              🔄
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
             </button>
           )}
         </div>

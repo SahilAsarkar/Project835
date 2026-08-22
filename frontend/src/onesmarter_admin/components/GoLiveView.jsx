@@ -560,7 +560,7 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                     {(step.downloadFilename || step.download_filename || (step.step_number === 1 ? 'OneSmarter_CutoverAuthorization_Template.pdf' : step.step_number === 2 ? 'OneSmarter_ProductionBaseline_Template.pdf' : null)) && (
                       <button
                         type="button"
-                        className="btn tiny icon-btn"
+                        className="btn icon-btn download-btn"
                         onClick={() => handleStepDownload(
                           step.step_number,
                           step.downloadFilename || step.download_filename || (step.step_number === 1 ? 'OneSmarter_CutoverAuthorization_Template.pdf' : 'OneSmarter_ProductionBaseline_Template.pdf')
@@ -568,14 +568,16 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                         title={`Download Template (${step.downloadFilename || step.download_filename || (step.step_number === 1 ? 'OneSmarter_CutoverAuthorization_Template.pdf' : 'OneSmarter_ProductionBaseline_Template.pdf')})`}
                         aria-label="Download Template"
                       >
-                        ⬇
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
                       </button>
                     )}
 
                     {/* Upload Document button */}
                     {(step.step_number === 1 || step.step_number === 2) && (
                       <label
-                        className={`btn tiny icon-btn ${isDone ? 'success' : 'primary'}`}
+                        className={`btn icon-btn upload-btn ${isDone ? 'done' : ''}`}
                         style={{
                           cursor: isWaiting || actionLoading ? 'not-allowed' : 'pointer',
                           opacity: isWaiting || actionLoading ? 0.6 : 1
@@ -583,7 +585,9 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                         title={`Upload Step ${step.step_number} Document`}
                         aria-label="Upload File"
                       >
-                        ⬆
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                          <path d="M5 20h14v-2H5v2zm0-10h4v6h6v-6h4l-7-7-7 7z"/>
+                        </svg>
                         <input
                           type="file"
                           hidden
@@ -598,12 +602,14 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                     {onOpenNotes && (
                       <button
                         type="button"
-                        className="btn tiny icon-btn"
+                        className="btn icon-btn notes-btn"
                         onClick={() => onOpenNotes(step.key, step.title)}
                         title={`Notes for Step ${step.step_number}`}
                         aria-label="Notes"
                       >
-                        💬
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block' }}>
+                          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                        </svg>
                       </button>
                     )}
 
@@ -611,13 +617,16 @@ export default function GoLiveView({ clients = [], activeClientId, onSelectClien
                     {(isDone || isInProgress) && step.step_number < 6 && (
                       <button
                         type="button"
-                        className="btn tiny danger icon-btn"
+                        className="btn icon-btn redo-btn"
                         disabled={actionLoading}
                         onClick={() => handleRedo(step.step_number)}
                         title={`Redo Step ${step.step_number}`}
                         aria-label={`Redo Step ${step.step_number}`}
                       >
-                        🔄
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                          <path d="M3 3v5h5"/>
+                        </svg>
                       </button>
                     )}
                   </div>
