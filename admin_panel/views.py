@@ -860,6 +860,17 @@ def api_admin_step_upload(request, client_id, step_key):
                 err_msg = val_res.get("error")
                 if not err_msg and checks:
                     err_msg = next((c["detail"] for c in checks if not c.get("ok")), "Validation failed")
+                
+                # Send failure email
+                try:
+                    from admin_panel.email_service import send_client_email
+                    subject = f"OneSmarter: File Validation Failed - {filename}"
+                    html = f"<h3>File Upload Failed</h3><p>The file <b>{filename}</b> failed validation.</p><p><b>Reason:</b> {err_msg}</p>"
+                    send_client_email(client_obj, subject, html)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(f"Failed to send email: {e}")
+
                 return JsonResponse({
                     "success": False,
                     "error": err_msg or "Validation failed",
@@ -903,6 +914,16 @@ def api_admin_step_upload(request, client_id, step_key):
                 )
             except Exception:
                 pass
+
+            # Send success email
+            try:
+                from admin_panel.email_service import send_client_email
+                subject = f"OneSmarter: File Upload Successful - {filename}"
+                html = f"<h3>File Upload Successful</h3><p>The file <b>{filename}</b> was successfully uploaded and passed all validations.</p>"
+                send_client_email(client_obj, subject, html)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to send email: {e}")
 
             return JsonResponse({
                 "success": True,
@@ -1063,6 +1084,18 @@ def api_admin_step_validate_835(request, client_id):
             errors = report.get('errors', [])
             err_msg = "EDI Validation Failed. " + (errors[0] if errors else "Errors found.")
             checks = [{"ok": False, "label": "Structure", "detail": e} for e in errors]
+            
+            # Send failure email
+            try:
+                from admin_panel.email_service import send_client_email
+                filename_to_report = request.headers.get('X-Filename', '835_file.x12')
+                subject = f"OneSmarter: 835 File Validation Failed - {filename_to_report}"
+                html = f"<h3>835 File Validation Failed</h3><p>The file <b>{filename_to_report}</b> failed X12 validation.</p><p><b>Reason:</b> {err_msg}</p>"
+                send_client_email(client_obj, subject, html)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to send email: {e}")
+
             return JsonResponse({"success": False, "error": err_msg, "checks": checks}, status=400)
             
         checks = [{"ok": True, "label": "Structure", "detail": f"835 structural and balance checks passed. Claims found: {report.get('claims', 0)}"}]
@@ -1163,6 +1196,17 @@ def api_admin_step_action(request, client_id, step_key, action):
                         client=client_obj,
                         defaults=smtp_fields
                     )
+                    
+                    # Send SMTP configuration success email
+                    try:
+                        from admin_panel.email_service import send_client_email
+                        subject = f"OneSmarter: SMTP Configuration Complete"
+                        html = f"<p>Hello,</p><p>SMTP configuration for {client_obj.name} has been successfully completed in the OneSmarter system.</p>"
+                        send_client_email(client_obj, subject, html)
+                    except Exception as email_err:
+                        # Log but do not fail the step
+                        import logging
+                        logging.getLogger(__name__).error(f"Failed to send SMTP success email: {email_err}")
                 except Exception as smtp_err:
                     return JsonResponse({'success': False, 'error': f'SMTP save failed: {smtp_err}'}, status=400)
             # ─────────────────────────────────────────────────────────────────
