@@ -37,11 +37,13 @@ from .views import (
     api_mappings_check,
     api_mappings_reset,
     api_admin_client_smtp,
+    api_admin_template_download,
 )
 
 urlpatterns = [
     path("api/clients/", api_admin_clients, name="admin_api_clients"),
     path("api/clients", api_admin_clients),
+    path("api/download/<uuid:client_id>/<str:step_key>/", api_admin_template_download, name="admin_api_template_download"),
     path("api/clients/create/", api_admin_create_client, name="admin_api_create_client"),
     path("api/clients/create", api_admin_create_client),
     path("api/clients/<uuid:client_id>/update/", api_admin_update_client, name="admin_api_update_client"),

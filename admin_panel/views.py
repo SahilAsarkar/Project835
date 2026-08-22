@@ -95,7 +95,7 @@ def api_admin_clients(request):
                 if num not in completed_steps:
                     in_progress_step = num
                     break
-            if in_progress_step == 13:
+            if in_progress_step >= 13:
                 dynamic_stage = "go_live_pending"
             else:
                 dynamic_stage = f"onboarding_step_{in_progress_step}"
@@ -706,7 +706,7 @@ def api_admin_client_state(request, client_id):
             completed_golive = ClientGoLiveStatus.objects.filter(client=client_obj, status='COMPLETED').count()
             is_done = (completed_golive == total_golive)
             
-        is_in_progress = st == 'IN_PROGRESS' or (step.step_number == 13 and not is_done and st != 'PENDING')
+        is_in_progress = st == 'IN_PROGRESS'
         
         if is_in_progress:
             in_progress_found = True
@@ -863,6 +863,48 @@ def api_admin_step_upload(request, client_id, step_key):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
     return JsonResponse({"success": True, "message": "File uploaded and step completed.", "checks": []})
+
+
+@csrf_exempt
+def api_admin_template_download(request, client_id, step_key):
+    """ GET /admin-panel/api/download/<client_id>/<step_key>/ """
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
+    
+    import os
+    from django.conf import settings
+    from django.http import HttpResponse
+
+    try:
+        parts = step_key.split('_')
+        if len(parts) >= 2:
+            step_num = int(parts[1])
+            
+            template_map = {
+                1: "OneSmarter_MutualNDA_Template.pdf",
+                2: "OneSmarter_BAA_Template.pdf",
+                3: "OneSmarter_SecurityReview_Template.pdf",
+            }
+            
+            filename = template_map.get(step_num)
+            
+            if not filename:
+                return JsonResponse({"success": False, "error": "No template available for this step."}, status=404)
+            
+            file_path = os.path.join(settings.BASE_DIR, 'sample_docs', filename)
+            
+            if not os.path.exists(file_path):
+                return JsonResponse({"success": False, "error": f"Template file {filename} not found."}, status=404)
+                
+            with open(file_path, 'rb') as f:
+                response = HttpResponse(f.read(), content_type='application/octet-stream')
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                response['X-OneSmarter-Filename'] = filename
+                return response
+        else:
+            return JsonResponse({"success": False, "error": "Invalid step key."}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @csrf_exempt

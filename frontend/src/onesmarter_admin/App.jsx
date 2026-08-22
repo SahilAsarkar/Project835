@@ -126,6 +126,37 @@ export default function App({ user, onLogout }) {
     };
   }, [isAuthenticated, activeClientId]);
 
+  // Sync state to URL for persistence on refresh
+  useEffect(() => {
+    if (!activeNav && !activeClientId) return;
+    const url = new URL(window.location.href);
+    let changed = false;
+    
+    if (activeNav) {
+      if (url.searchParams.get('nav') !== activeNav) {
+        url.searchParams.set('nav', activeNav);
+        changed = true;
+      }
+    } else if (url.searchParams.has('nav')) {
+      url.searchParams.delete('nav');
+      changed = true;
+    }
+    
+    if (activeClientId) {
+      if (url.searchParams.get('client') !== activeClientId) {
+        url.searchParams.set('client', activeClientId);
+        changed = true;
+      }
+    } else if (url.searchParams.has('client')) {
+      url.searchParams.delete('client');
+      changed = true;
+    }
+    
+    if (changed) {
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [activeNav, activeClientId]);
+
   const loadClients = async () => {
     try {
       const data = await fetchClients();
