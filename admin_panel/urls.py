@@ -38,6 +38,7 @@ from .views import (
     api_mappings_reset,
     api_admin_client_smtp,
     api_admin_template_download,
+    api_admin_audit_logs,
 )
 
 urlpatterns = [
@@ -88,4 +89,6 @@ urlpatterns = [
     path("api/mappings/check", api_mappings_check),
     path("api/mappings/reset/", api_mappings_reset, name="admin_api_mappings_reset"),
     path("api/mappings/reset", api_mappings_reset),
+    path("api/audit-logs/", api_admin_audit_logs, name="admin_api_audit_logs"),
+    path("api/audit-logs", api_admin_audit_logs),
 ]

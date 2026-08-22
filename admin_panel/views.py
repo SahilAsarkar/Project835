@@ -323,6 +323,23 @@ def api_admin_update_client(request, client_id):
             
     client_obj.save()
 
+    # Audit log for client update
+    try:
+        actor = "System"
+        if request.user and hasattr(request.user, "name") and request.user.name:
+            actor = request.user.name
+        elif request.user and hasattr(request.user, "email") and request.user.email:
+            actor = request.user.email
+        AuditLog.objects.create(
+            module="CLIENTS",
+            action="CLIENT_UPDATED",
+            details=f"Client '{client_obj.name}' profile updated.",
+            performed_by=actor,
+            client=client_obj
+        )
+    except Exception:
+        pass
+
     return JsonResponse({
         "success": True,
         "message": f"Client '{client_obj.name}' updated successfully.",
@@ -356,6 +373,22 @@ def api_admin_delete_client(request, client_id):
     try:
         client_obj = Client.objects.get(id=client_id)
         name = client_obj.name
+        # Audit log before delete (since client will be gone)
+        try:
+            actor = "System"
+            if request.user and hasattr(request.user, "name") and request.user.name:
+                actor = request.user.name
+            elif request.user and hasattr(request.user, "email") and request.user.email:
+                actor = request.user.email
+            AuditLog.objects.create(
+                module="CLIENTS",
+                action="CLIENT_DELETED",
+                details=f"Client '{name}' permanently deleted from the system.",
+                performed_by=actor,
+                client=None
+            )
+        except Exception:
+            pass
         client_obj.delete()
         return JsonResponse({"success": True, "message": f"Client '{name}' deleted successfully."})
     except (Client.DoesNotExist, ValueError):
@@ -854,6 +887,23 @@ def api_admin_step_upload(request, client_id, step_key):
             step_status.save()
             update_client_onboarding_stats(client_obj)
 
+            # Audit log for step upload
+            try:
+                actor = "System"
+                if request.user and hasattr(request.user, "name") and request.user.name:
+                    actor = request.user.name
+                elif request.user and hasattr(request.user, "email") and request.user.email:
+                    actor = request.user.email
+                AuditLog.objects.create(
+                    module="ONBOARDING",
+                    action="STEP_UPLOAD",
+                    details=f"Step {step_num} ('{step_def.title}') document uploaded for client '{client_obj.name}'. File: {filename}.",
+                    performed_by=actor,
+                    client=client_obj
+                )
+            except Exception:
+                pass
+
             return JsonResponse({
                 "success": True,
                 "message": "File uploaded and step completed.",
@@ -863,6 +913,7 @@ def api_admin_step_upload(request, client_id, step_key):
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
     return JsonResponse({"success": True, "message": "File uploaded and step completed.", "checks": []})
+
 
 
 @csrf_exempt
@@ -966,9 +1017,28 @@ def api_admin_step_redo(request, client_id, step_key):
                     sub_status.save()
 
             update_client_onboarding_stats(client_obj)
+
+            # Audit log for step redo
+            try:
+                actor = "System"
+                if request.user and hasattr(request.user, "name") and request.user.name:
+                    actor = request.user.name
+                elif request.user and hasattr(request.user, "email") and request.user.email:
+                    actor = request.user.email
+                AuditLog.objects.create(
+                    module="ONBOARDING",
+                    action="STEP_REDO",
+                    details=f"Step {step_num} redone for client '{client_obj.name}'. Subsequent steps reset to PENDING.",
+                    performed_by=actor,
+                    client=client_obj
+                )
+            except Exception:
+                pass
+
     except Exception:
         pass
     return JsonResponse({"success": True, "message": "Step reset to IN_PROGRESS, subsequent steps locked"})
+
 
 
 @csrf_exempt
@@ -1177,10 +1247,29 @@ def api_admin_step_action(request, client_id, step_key, action):
             step_status.status = 'COMPLETED'
             step_status.save()
             update_client_onboarding_stats(client_obj)
+
+            # Audit log for step action
+            try:
+                actor = "System"
+                if request.user and hasattr(request.user, "name") and request.user.name:
+                    actor = request.user.name
+                elif request.user and hasattr(request.user, "email") and request.user.email:
+                    actor = request.user.email
+                AuditLog.objects.create(
+                    module="ONBOARDING",
+                    action=f"STEP_{action.upper().replace('-', '_')}",
+                    details=f"Step {step_num} ('{step_def.title}') action '{action}' completed for client '{client_obj.name}'.",
+                    performed_by=actor,
+                    client=client_obj
+                )
+            except Exception:
+                pass
+
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
         
     return JsonResponse({"success": True, "message": f"Action {action} on {step_key} completed successfully."})
+
 
 
 @csrf_exempt
@@ -1922,3 +2011,49 @@ def api_mappings_reset(request):
         "note": "Mappings reset to the current converter baseline."
     })
 
+
+@csrf_exempt
+def api_admin_audit_logs(request):
+    """
+    GET /admin-panel/api/audit-logs/
+    Returns filtered, paginated audit log entries.
+    Supports ?client_id=<uuid>&module=<str>&limit=<int>
+    """
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
+
+    client_id = request.GET.get("client_id", "").strip()
+    module_filter = request.GET.get("module", "").strip().upper()
+    try:
+        limit = int(request.GET.get("limit", 500))
+    except ValueError:
+        limit = 500
+
+    qs = AuditLog.objects.select_related("client").order_by("-timestamp")
+
+    if client_id:
+        try:
+            from accounts.models import Client as ClientModel
+            client_obj = ClientModel.objects.get(id=client_id)
+            qs = qs.filter(client=client_obj)
+        except Exception:
+            pass
+
+    if module_filter and module_filter != "ALL":
+        qs = qs.filter(module=module_filter)
+
+    logs = []
+    for log in qs[:limit]:
+        logs.append({
+            "id": log.id,
+            "module": log.module,
+            "action": log.action,
+            "details": log.details,
+            "performed_by": log.performed_by,
+            "timestamp": log.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ") if log.timestamp else "",
+            "client": log.client.name if log.client else None,
+            "client_id": str(log.client.id) if log.client else None,
+            "client_name": log.client.name if log.client else "System",
+        })
+
+    return JsonResponse({"success": True, "logs": logs, "count": len(logs)})

@@ -97,6 +97,15 @@ export default function App({ user, onLogout }) {
   const [isRevokeOpen, setIsRevokeOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [revokeLoading, setRevokeLoading] = useState(false);
+  
+  // Offboarding states
+  const [isOffboardConfirmOpen, setIsOffboardConfirmOpen] = useState(false);
+  const [offboardConfirmInput, setOffboardConfirmInput] = useState('');
+  const [offboardFileUploaded, setOffboardFileUploaded] = useState(false);
+  const [offboardFileName, setOffboardFileName] = useState('');
+  const [offboardNotes, setOffboardNotes] = useState('');
+  const [offboardStep1Done, setOffboardStep1Done] = useState(false);
+
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -576,6 +585,8 @@ export default function App({ user, onLogout }) {
                   <option value="GO_LIVE">Go Live</option>
                   <option value="AUTH">Authentication</option>
                   <option value="SYSTEM">System</option>
+                  <option value="OPERATIONS">Operations</option>
+                  <option value="OFFBOARDING">Offboarding</option>
                 </select>
 
                 <span className="n">{auditLogs.length} Events Recorded</span>
@@ -671,10 +682,27 @@ export default function App({ user, onLogout }) {
               <div className="eyebrow">Reliability</div>
               <h1>Operations &amp; Delivery</h1>
               <p className="sub">File delivery metrics, silent folder monitoring, and SLA tracking.</p>
-              <div className="metrics">
-                <div className="metric"><div className="v">99.98%</div><div className="l">Delivery Success</div><div className="d">90-day average</div></div>
-                <div className="metric"><div className="v">12m</div><div className="l">Restore Drill</div><div className="d">Completed successfully</div></div>
-                <div className="metric"><div className="v">0</div><div className="l">Open Incidents</div><div className="d">Healthy operation</div></div>
+              <div className="metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+                <div className="metric">
+                  <div className="v">1,248</div>
+                  <div className="l">Total Files Processed</div>
+                  <div className="d" style={{ color: 'var(--teal, #0d9488)', fontWeight: 600 }}>100% processed</div>
+                </div>
+                <div className="metric">
+                  <div className="v">1,245</div>
+                  <div className="l">Total Successful Push to Outbound</div>
+                  <div className="d" style={{ color: 'var(--teal, #0d9488)', fontWeight: 600 }}>99.76% successful push</div>
+                </div>
+                <div className="metric">
+                  <div className="v">1,248</div>
+                  <div className="l">Pulled from Inbound</div>
+                  <div className="d" style={{ color: 'var(--teal, #0d9488)', fontWeight: 600 }}>100% successfully pulled</div>
+                </div>
+                <div className="metric">
+                  <div className="v" style={{ color: 'var(--teal, #0d9488)' }}>3,741</div>
+                  <div className="l">Total Operations (All Cycles)</div>
+                  <div className="d" style={{ color: 'var(--teal, #0d9488)', fontWeight: 600 }}>99.92% overall success</div>
+                </div>
               </div>
             </section>
           )}
@@ -684,10 +712,99 @@ export default function App({ user, onLogout }) {
               <div className="eyebrow">Lifecycle Termination</div>
               <h1>Offboarding Procedures</h1>
               <p className="sub">Cryptographic key destruction and certified data return upon client contract conclusion.</p>
+              
               <div className="ladder">
-                <div className="rung"><div className="mark">1</div><div className="txt"><h3>Termination Notice Recorded</h3><div className="meta">Effective date registered in database</div></div></div>
-                <div className="rung"><div className="mark">2</div><div className="txt"><h3>Archive Returned to Client</h3><div className="meta">Exported in standard format with intact digital signatures</div></div></div>
-                <div className="rung"><div className="mark">3</div><div className="txt"><h3>Tenant Key Destruction</h3><div className="meta">Permanent erasure of wrapped post-quantum tenant keys</div></div></div>
+                {/* Step 1 */}
+                <div className="rung" style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div className="mark" style={{ background: offboardStep1Done ? 'var(--teal-bg)' : undefined, color: offboardStep1Done ? 'var(--teal)' : undefined }}>1</div>
+                  <div className="txt" style={{ flex: 1 }}>
+                    <h3>Termination Notice Recorded</h3>
+                    <div className="meta">Effective date registered in database</div>
+                    
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '12px' }}>
+                        <span>📎 Upload PDF / Doc</span>
+                        <input 
+                          type="file" 
+                          hidden 
+                          accept=".pdf,.doc,.docx,.txt" 
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              setOffboardFileName(e.target.files[0].name);
+                              setOffboardFileUploaded(true);
+                              setOffboardStep1Done(true);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      <button 
+                        type="button" 
+                        className="btn" 
+                        onClick={() => {
+                          setActiveNoteTarget({ stepKey: 'offboard_step_1', stepTitle: 'Termination Notice Recorded' });
+                          setIsNotesOpen(true);
+                        }}
+                        style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px' }}
+                      >
+                        💬 Notes
+                      </button>
+
+                      {offboardStep1Done && (
+                        <button 
+                          type="button" 
+                          className="btn" 
+                          onClick={() => {
+                            setOffboardFileUploaded(false);
+                            setOffboardFileName('');
+                            setOffboardStep1Done(false);
+                          }}
+                          style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px', color: 'var(--brick)' }}
+                        >
+                          🔄 Redo
+                        </button>
+                      )}
+                    </div>
+
+                    {offboardFileUploaded && (
+                      <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--teal)', fontWeight: '600' }}>
+                        ✓ Uploaded document: {offboardFileName}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="rung" style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div className="mark">2</div>
+                  <div className="txt">
+                    <h3>Archive Returned to Client</h3>
+                    <div className="meta">Exported in standard format with intact digital signatures</div>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="rung" style={{ padding: '16px 0' }}>
+                  <div className="mark" style={{ background: 'var(--brick-bg)', color: 'var(--brick)' }}>3</div>
+                  <div className="txt" style={{ flex: 1 }}>
+                    <h3>Tenant Key Destruction</h3>
+                    <div className="meta" style={{ color: 'var(--brick)', fontWeight: '600' }}>PERMANENT RECORD DELETION OF A CLIENT</div>
+                    
+                    <div style={{ marginTop: '12px' }}>
+                      <button 
+                        type="button" 
+                        className="btn danger" 
+                        onClick={() => {
+                          setOffboardConfirmInput('');
+                          setIsOffboardConfirmOpen(true);
+                        }}
+                        style={{ background: 'var(--brick-bg)', borderColor: 'var(--brick)', color: 'var(--brick)', fontWeight: '600', padding: '8px 16px' }}
+                      >
+                        ⚠️ Destroy Tenant Keys & Delete Records
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
           )}
@@ -740,6 +857,67 @@ export default function App({ user, onLogout }) {
         content={appFeedback.content}
         checks={[]}
       />
+
+      {/* Tenant Key Destruction Confirmation Modal */}
+      {isOffboardConfirmOpen && (
+        <div className="modal on" onClick={() => setIsOffboardConfirmOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-t" style={{ color: 'var(--brick)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>⚠️ Critical Warning</span> Permanent Tenant Key Destruction
+            </div>
+            
+            <div className="modal-b" style={{ marginTop: '14px', fontSize: '13.5px', color: 'var(--ink)' }}>
+              <p style={{ fontWeight: '600', color: 'var(--brick)' }}>
+                WARNING: This action is destructive and CANNOT BE REVERTED under any circumstances.
+              </p>
+              <p style={{ marginTop: '10px' }}>
+                All wrapped tenant keys will be destroyed immediately and all client records will be wiped.
+              </p>
+              <p style={{ marginTop: '12px', fontWeight: '500' }}>
+                Please type <code style={{ color: 'var(--brick)', background: 'var(--brick-bg)', padding: '2px 4px', borderRadius: '3px' }}>CONFIRM</code> below to authorize the destruction procedure:
+              </p>
+              
+              <input 
+                type="text" 
+                className="control mono" 
+                placeholder="Type CONFIRM" 
+                value={offboardConfirmInput}
+                onChange={(e) => setOffboardConfirmInput(e.target.value)}
+                style={{ width: '100%', marginTop: '12px', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: '4px', textAlign: 'center', letterSpacing: '2px', fontWeight: 'bold' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button type="button" className="btn" onClick={() => setIsOffboardConfirmOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                disabled={offboardConfirmInput !== 'CONFIRM'}
+                onClick={() => {
+                  setIsOffboardConfirmOpen(false);
+                  setAppFeedback({
+                    isOpen: true,
+                    kind: 'ok',
+                    title: 'Destruction Complete',
+                    content: 'Cryptographic keys erased and tenant data wiped successfully. The procedure is complete.'
+                  });
+                }}
+                style={{ 
+                  background: offboardConfirmInput === 'CONFIRM' ? 'var(--brick)' : '#f1f5f9', 
+                  borderColor: offboardConfirmInput === 'CONFIRM' ? 'var(--brick)' : '#e2e8f0', 
+                  color: offboardConfirmInput === 'CONFIRM' ? '#ffffff' : '#94a3b8', 
+                  fontWeight: '600',
+                  cursor: offboardConfirmInput === 'CONFIRM' ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Permanently Destroy keys
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
