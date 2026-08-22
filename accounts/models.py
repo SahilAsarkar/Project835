@@ -15,6 +15,7 @@ class Client(models.Model):
         ("golive_pending", "Go Live Pending"),
         ("production_pending", "Production Pending"),
         ("production", "Production"),
+        ("offboarded", "Offboarded"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

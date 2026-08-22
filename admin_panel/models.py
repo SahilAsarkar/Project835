@@ -61,6 +61,36 @@ class ClientGoLiveStatus(models.Model):
         ordering = ['step__step_number']
 
 
+class OffboardingStepDefinition(models.Model):
+    step_number = models.IntegerField(unique=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['step_number']
+
+    def __str__(self):
+        return f"Offboarding Step {self.step_number}: {self.title}"
+
+
+class ClientOffboardingStatus(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('ERROR', 'Error'),
+    ]
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='offboarding_steps')
+    step = models.ForeignKey(OffboardingStepDefinition, on_delete=models.CASCADE)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PENDING')
+    document_path = models.CharField(max_length=500, blank=True, null=True) # for tracking uploaded file names if any
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('client', 'step')
+        ordering = ['step__step_number']
+
+
 class ClientTestEnvironment(models.Model):
     client = models.OneToOneField(Client, on_delete=models.CASCADE, related_name='test_environment')
     sftp_host = models.CharField(max_length=255, default='sftp-test.internal')

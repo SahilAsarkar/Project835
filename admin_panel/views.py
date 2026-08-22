@@ -2150,3 +2150,128 @@ def api_admin_audit_logs(request):
         })
 
     return JsonResponse({"success": True, "logs": logs, "count": len(logs)})
+
+
+# ---------------------------------------------------------
+# OFFBOARDING APIs
+# ---------------------------------------------------------
+from admin_panel.models import OffboardingStepDefinition, ClientOffboardingStatus
+
+def helper_get_offboarding_state(client_obj):
+    total = 3
+    steps_data = []
+    
+    for i in range(1, total + 1):
+        try:
+            status_obj = ClientOffboardingStatus.objects.get(client=client_obj, step__step_number=i)
+            steps_data.append({
+                "step": i,
+                "status": status_obj.status,
+                "document_path": status_obj.document_path,
+                "updated_at": status_obj.updated_at.isoformat() if status_obj.updated_at else None
+            })
+        except ClientOffboardingStatus.DoesNotExist:
+            steps_data.append({
+                "step": i,
+                "status": "PENDING",
+                "document_path": None,
+                "updated_at": None
+            })
+            
+    return {
+        "total_steps": total,
+        "completed_steps": sum(1 for s in steps_data if s["status"] == "COMPLETED"),
+        "steps": steps_data
+    }
+
+def api_admin_offboarding_state(request, client_id):
+    from django.http import JsonResponse
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "Only GET allowed"}, status=405)
+        
+    try:
+        from accounts.models import Client
+        client_obj = Client.objects.get(id=client_id)
+    except Exception:
+        return JsonResponse({"success": False, "error": "Client not found"}, status=404)
+
+    state = helper_get_offboarding_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+@csrf_exempt
+def api_admin_offboarding_step_complete(request, client_id, step_num):
+    from django.http import JsonResponse
+    try:
+        from accounts.models import Client
+        client_obj = Client.objects.get(id=client_id)
+        step_num = int(step_num)
+        
+        step_titles = {
+            1: "Termination Notice Recorded",
+            2: "Archive Returned to Client",
+            3: "Tenant Key Destruction"
+        }
+        
+        step_def, _ = OffboardingStepDefinition.objects.get_or_create(
+            step_number=step_num, 
+            defaults={"title": step_titles.get(step_num, f"Offboarding Step {step_num}")}
+        )
+        status_obj, _ = ClientOffboardingStatus.objects.get_or_create(client=client_obj, step=step_def)
+        
+        # If it's step 1 and it's a POST with a file
+        if step_num == 1 and request.method == "POST" and request.body:
+            filename = request.headers.get('X-Filename', 'uploaded_document.pdf')
+            # we could save the file, but for now we just record the name
+            status_obj.document_path = filename
+            
+            from admin_panel.models import ClientDocument
+            from django.core.files.base import ContentFile
+            doc = ClientDocument.objects.create(
+                client=client_obj,
+                document_name="Termination Notice",
+                original_filename=filename,
+                document_type="Offboarding Step 1",
+                file_size=len(request.body),
+                uploaded_by="Admin User"
+            )
+            doc.file.save(filename, ContentFile(request.body), save=True)
+            
+        status_obj.status = 'COMPLETED'
+        status_obj.save()
+        
+        if step_num == 3:
+            client_obj.status = 'INACTIVE'
+            client_obj.stage = 'offboarded'
+            client_obj.save()
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_offboarding_state(client_obj)
+    return JsonResponse({"success": True, "state": state})
+
+@csrf_exempt
+def api_admin_offboarding_step_redo(request, client_id, step_num):
+    from django.http import JsonResponse
+    try:
+        from accounts.models import Client
+        client_obj = Client.objects.get(id=client_id)
+        step_num = int(step_num)
+        
+        status_obj = ClientOffboardingStatus.objects.get(client=client_obj, step__step_number=step_num)
+        status_obj.status = 'PENDING'
+        status_obj.document_path = None
+        status_obj.save()
+        
+        if step_num == 3:
+            client_obj.status = 'ACTIVE'
+            client_obj.stage = 'production' # fallback
+            client_obj.save()
+            
+    except ClientOffboardingStatus.DoesNotExist:
+        pass
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+    state = helper_get_offboarding_state(client_obj)
+    return JsonResponse({"success": True, "state": state})

@@ -39,6 +39,9 @@ from .views import (
     api_admin_client_smtp,
     api_admin_template_download,
     api_admin_audit_logs,
+    api_admin_offboarding_state,
+    api_admin_offboarding_step_complete,
+    api_admin_offboarding_step_redo,
 )
 
 urlpatterns = [
@@ -53,7 +56,7 @@ urlpatterns = [
     path("api/clients/<uuid:client_id>/steps/<str:step_key>/upload/", api_admin_step_upload),
     path("api/clients/<uuid:client_id>/steps/<str:step_key>/file/", api_admin_step_file),
     path("api/clients/<uuid:client_id>/steps/<str:step_key>/notes/", api_admin_step_notes),
-    path("api/clients/<uuid:client_id>/steps/<str:step_key>/redo/", api_admin_step_redo),
+    path("api/clients/<uuid:client_id>/steps/<str:step_key>/redo/", api_admin_step_redo, name="admin_api_step_redo"),
     path("api/clients/<uuid:client_id>/documents/", api_admin_client_documents),
     path("api/clients/<uuid:client_id>/documents/upload/", api_admin_client_documents_upload),
     path("api/documents/<uuid:doc_id>/download/", api_admin_document_download),
@@ -62,7 +65,7 @@ urlpatterns = [
     path("api/clients/<uuid:client_id>/test-environment/", api_admin_client_test_environment),
     path("api/clients/<uuid:client_id>/test-environment/run-test/", api_admin_test_environment_run),
     path("api/clients/<uuid:client_id>/steps/step_7_835_val/validate-uploaded/", api_admin_step_validate_835),
-    path("api/clients/<uuid:client_id>/steps/<str:step_key>/<str:action>/", api_admin_step_action),
+    path("api/clients/<uuid:client_id>/steps/<str:step_key>/<str:action>/", api_admin_step_action, name="admin_api_step_action"),
     path("api/clients/<uuid:client_id>/golive/state/", api_admin_golive_state),
     path("api/clients/<uuid:client_id>/smtp/", api_admin_client_smtp, name="admin_api_client_smtp"),
     path("api/clients/<uuid:client_id>/golive/steps/<int:step_num>/upload/", api_admin_golive_step_upload),
@@ -72,6 +75,9 @@ urlpatterns = [
     path("api/clients/<uuid:client_id>/golive/steps/5/comment/", api_admin_golive_step5_comment),
     path("api/clients/<uuid:client_id>/golive/steps/6/complete/", api_admin_golive_step6_complete),
     path("api/clients/<uuid:client_id>/golive/steps/<int:step_num>/redo/", api_admin_golive_step_redo),
+    path("api/clients/<uuid:client_id>/offboarding/state/", api_admin_offboarding_state),
+    path("api/clients/<uuid:client_id>/offboarding/steps/<int:step_num>/complete/", api_admin_offboarding_step_complete),
+    path("api/clients/<uuid:client_id>/offboarding/steps/<int:step_num>/redo/", api_admin_offboarding_step_redo),
     path("api/users/", api_admin_users, name="admin_api_users"),
     path("api/users", api_admin_users),
     path("api/users/create/", api_admin_create_user, name="admin_api_create_user"),

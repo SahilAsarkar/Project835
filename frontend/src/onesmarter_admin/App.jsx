@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import ClientsTable from './components/ClientsTable';
+import ClientOffboarding from './components/ClientOffboarding';
 import OnboardingLadder from './components/OnboardingLadder';
 import DocumentsView from './components/DocumentsView';
 import FilesView from './components/FilesView';
@@ -15,7 +16,7 @@ import FeedbackModal from './components/modals/FeedbackModal';
 import LoginGate from './components/login/LoginGate';
 import MappingApp from './components/MappingTool/MappingApp';
 
-import { fetchClients, fetchClientState, createClient, deleteClient, redoStep, fetchEmployeeRoles, fetchAuditLogs, fetchAccessInfo, logoutAdmin } from './services/api';
+import { fetchClients, fetchClientState, createClient, deleteClient, redoStep, fetchEmployeeRoles, fetchAuditLogs, fetchAccessInfo, logoutAdmin, fetchOffboardingState, completeOffboardingStep, redoOffboardingStep } from './services/api';
 
 function formatDateTime(isoStr) {
   if (!isoStr) return '—';
@@ -69,6 +70,7 @@ export default function App({ user, onLogout }) {
     return params.get('client') || '';
   });
   const [clientState, setClientState] = useState(null);
+  const [offboardingState, setOffboardingState] = useState(null);
   const [activeNav, setActiveNav] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const n = params.get('nav');
@@ -252,10 +254,17 @@ export default function App({ user, onLogout }) {
       : <span style={{ marginLeft: '4px', color: 'var(--teal)', fontSize: '10px' }}>▼</span>;
   };
 
+  // ==========================================
+  // FETCH CLIENT DATA
+  // ==========================================
   const loadClientWorkflow = async (clientId) => {
+    if (!clientId) return;
     try {
       const state = await fetchClientState(clientId);
       setClientState(state);
+      
+      const offbState = await fetchOffboardingState(clientId);
+      setOffboardingState(offbState);
     } catch (err) {
       console.error('Failed to load client workflow:', err);
     }
@@ -728,105 +737,17 @@ export default function App({ user, onLogout }) {
           )}
 
           {activeNav === 'offboard' && (
-            <section className="view on" id="v-offboard">
-              <div className="eyebrow">Lifecycle Termination</div>
-              <h1>Offboarding Procedures</h1>
-              <p className="sub">Cryptographic key destruction and certified data return upon client contract conclusion.</p>
-              
-              <div className="ladder">
-                {/* Step 1 */}
-                <div className="rung" style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div className="mark" style={{ background: offboardStep1Done ? 'var(--teal-bg)' : undefined, color: offboardStep1Done ? 'var(--teal)' : undefined }}>1</div>
-                  <div className="txt" style={{ flex: 1 }}>
-                    <h3>Termination Notice Recorded</h3>
-                    <div className="meta">Effective date registered in database</div>
-                    
-                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '12px' }}>
-                        <span>📎 Upload PDF / Doc</span>
-                        <input 
-                          type="file" 
-                          hidden 
-                          accept=".pdf,.doc,.docx,.txt" 
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              setOffboardFileName(e.target.files[0].name);
-                              setOffboardFileUploaded(true);
-                              setOffboardStep1Done(true);
-                            }
-                          }}
-                        />
-                      </label>
-
-                      <button 
-                        type="button" 
-                        className="btn" 
-                        onClick={() => {
-                          setActiveNoteTarget({ stepKey: 'offboard_step_1', stepTitle: 'Termination Notice Recorded' });
-                          setIsNotesOpen(true);
-                        }}
-                        style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px' }}
-                      >
-                        💬 Notes
-                      </button>
-
-                      {offboardStep1Done && (
-                        <button 
-                          type="button" 
-                          className="btn" 
-                          onClick={() => {
-                            setOffboardFileUploaded(false);
-                            setOffboardFileName('');
-                            setOffboardStep1Done(false);
-                          }}
-                          style={{ background: 'var(--surface)', border: '1px solid var(--line)', padding: '6px 12px', fontSize: '12px', color: 'var(--brick)' }}
-                        >
-                          🔄 Redo
-                        </button>
-                      )}
-                    </div>
-
-                    {offboardFileUploaded && (
-                      <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--teal)', fontWeight: '600' }}>
-                        ✓ Uploaded document: {offboardFileName}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className="rung" style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div className="mark">2</div>
-                  <div className="txt">
-                    <h3>Archive Returned to Client</h3>
-                    <div className="meta">Exported in standard format with intact digital signatures</div>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="rung" style={{ padding: '16px 0' }}>
-                  <div className="mark" style={{ background: 'var(--brick-bg)', color: 'var(--brick)' }}>3</div>
-                  <div className="txt" style={{ flex: 1 }}>
-                    <h3>Tenant Key Destruction</h3>
-                    <div className="meta" style={{ color: 'var(--brick)', fontWeight: '600' }}>PERMANENT RECORD DELETION OF A CLIENT</div>
-                    
-                    <div style={{ marginTop: '12px' }}>
-                      <button 
-                        type="button" 
-                        className="btn danger" 
-                        onClick={() => {
-                          setOffboardConfirmInput('');
-                          setIsOffboardConfirmOpen(true);
-                        }}
-                        style={{ background: 'var(--brick-bg)', borderColor: 'var(--brick)', color: 'var(--brick)', fontWeight: '600', padding: '8px 16px' }}
-                      >
-                        ⚠️ Destroy Tenant Keys & Delete Records
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <ClientOffboarding 
+              clients={clients} 
+              activeClientId={activeClientId} 
+              onSelectClient={(clientId) => {
+                setActiveClientId(clientId);
+                loadClientWorkflow(clientId);
+              }}
+              offboardingState={offboardingState} 
+              onRefresh={() => loadClientWorkflow(activeClientId)} 
+              onOpenNotes={(stepKey, title) => { setActiveNoteTarget({ stepKey, stepTitle: title }); setIsNotesOpen(true); }}
+            />
           )}
         </main>
       </div>

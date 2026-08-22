@@ -617,3 +617,48 @@ export async function saveClientSmtpConfig(clientId, payload) {
   if (!res.ok) throw new Error(data.error || 'Failed to save SMTP config');
   return data;
 }
+
+
+// ------------------------------------------------------------------
+// Offboarding API
+// ------------------------------------------------------------------
+export const fetchOffboardingState = async (clientId) => {
+  const res = await fetch(`/admin-panel/api/clients/${clientId}/offboarding/state/`);
+  if (!res.ok) throw new Error('Failed to fetch offboarding state');
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch offboarding state');
+  return data.state;
+};
+
+export const completeOffboardingStep = async (clientId, stepNum, file = null) => {
+  let headers = {};
+  let body = null;
+
+  if (file) {
+    headers['X-Filename'] = file.name;
+    body = file;
+  } else {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const res = await fetch(`/admin-panel/api/clients/${clientId}/offboarding/steps/${stepNum}/complete/`, {
+    method: 'POST',
+    headers,
+    body
+  });
+  
+  if (!res.ok) throw new Error('Failed to complete offboarding step');
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to complete offboarding step');
+  return data.state;
+};
+
+export const redoOffboardingStep = async (clientId, stepNum) => {
+  const res = await fetch(`/admin-panel/api/clients/${clientId}/offboarding/steps/${stepNum}/redo/`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to redo offboarding step');
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to redo offboarding step');
+  return data.state;
+};
