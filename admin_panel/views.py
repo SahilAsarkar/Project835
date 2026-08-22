@@ -825,13 +825,37 @@ def update_client_onboarding_stats(client_obj):
     total_steps = OnboardingStepDefinition.objects.count()
     if total_steps == 0:
         return
-    completed_steps = ClientStepStatus.objects.filter(client=client_obj, status='COMPLETED').count()
+        
+    completed_steps_qs = ClientStepStatus.objects.filter(client=client_obj, status='COMPLETED')
+    completed_step_nums = set(completed_steps_qs.values_list('step__step_number', flat=True))
+    
+    # Ensure step 13 is counted if go-live is complete
+    total_golive = GoLiveStepDefinition.objects.count()
+    if total_golive == 0: total_golive = 6
+    completed_golive = ClientGoLiveStatus.objects.filter(client=client_obj, status='COMPLETED').count()
+    
+    if completed_golive == total_golive:
+        if 13 not in completed_step_nums:
+            completed_step_nums.add(13)
+            try:
+                step13_def = OnboardingStepDefinition.objects.get(step_number=13)
+                status_obj, _ = ClientStepStatus.objects.get_or_create(client=client_obj, step=step13_def)
+                status_obj.status = 'COMPLETED'
+                status_obj.save()
+            except Exception:
+                pass
+
+    completed_steps = len(completed_step_nums)
     progress_pct = int((completed_steps / total_steps) * 100)
     
-    stage = "onboarding"
-    if completed_steps == total_steps:
-        stage = "onboarding_completed"
-        
+    # Don't regress stage if they are already in production
+    stage = client_obj.stage
+    if stage not in ['IN_PRODUCTION', 'PRODUCTION', 'production', 'production_pending']:
+        if completed_steps == total_steps:
+            stage = "onboarding_completed"
+        else:
+            stage = "onboarding"
+            
     client_obj.progress_pct = progress_pct
     client_obj.stage = stage
     client_obj.save()
