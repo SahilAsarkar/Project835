@@ -59,6 +59,18 @@ def api_process_tracked_file(request):
         }, status=400)
 
     db_rec = res["db_record"]
+
+    if client:
+        try:
+            from admin_panel.email_service import send_client_email
+            subject = f"OneSmarter: 835 File Processed - {original_filename}"
+            html = f"<h3>File Processed Successfully</h3><p>Your EDI 835 file <b>{original_filename}</b> was successfully processed.</p><p>Claims: {res['claims_count']}</p>"
+            to_emails = [request.user.email] if request.user and request.user.email else None
+            send_client_email(client, subject, html, to_emails=to_emails)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to send email on process: {e}")
+
     return JsonResponse({
         "success": True,
         "file_id": str(db_rec.id),
